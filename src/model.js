@@ -36,7 +36,7 @@ export function sample(day) {
 
 export function dailyPlan(records, day, essentialsOnly) {
   const tasks = records.filter(item => item.kind === 'task' && !item.suggested && !item.startsAt && !item.calendarOnly);
-  const dueSoon = item => item.due && item.due <= shiftDay(day, 1);
+  const dueSoon = item => item.due && item.due <= day;
   const open = tasks.filter(item => (item.status === 'open' || item.status === 'escalated') && !item.completed);
   const planned = open.filter(item => item.planned === day).reduce((total, item) => total + (item.minutes || 0), 0);
   const today = open.filter(item => (item.planned === day || dueSoon(item)) && (!essentialsOnly || item.essential || item.status === 'escalated'))
@@ -46,16 +46,21 @@ export function dailyPlan(records, day, essentialsOnly) {
 }
 
 export function riskSignals(records, day, available, planned) {
-  const tasks = records.filter(item => item.kind === 'task' && !item.suggested && !item.completed && item.status !== 'done');
+  const tasks = records.filter(item => item.kind === 'task' && !item.suggested && !item.completed && item.status !== 'done' && !item.startsAt && !item.calendarOnly);
   const overdue = tasks.filter(item => item.due && item.due < day);
-  const unplanned = tasks.filter(item => item.due >= day && item.due <= shiftDay(day, 2) && !item.planned && !item.startsAt);
-  const events = tasks.filter(item => item.startsAt && item.endsAt && item.planned >= day && item.planned <= shiftDay(day, 7));
-  const clashes = events.filter((item, index) => events.slice(index + 1).some(other =>
-    Date.parse(item.startsAt) < Date.parse(other.endsAt) && Date.parse(other.startsAt) < Date.parse(item.endsAt)));
+  const unplanned = tasks.filter(item => item.due >= day && item.due <= shiftDay(day, 2) && (!item.planned || item.planned > item.due));
+  const events = records.filter(item => !item.suggested && !item.completed && item.startsAt && item.endsAt && item.planned >= day && item.planned <= shiftDay(day, 7));
+  const followups = tasks.filter(item => item.status === 'waiting' && item.followup && item.followup <= day);
+  let clash;
+  for (const [index, item] of events.entries()) {
+    const other = events.slice(index + 1).find(candidate => Date.parse(item.startsAt) < Date.parse(candidate.endsAt) && Date.parse(candidate.startsAt) < Date.parse(item.endsAt));
+    if (other) { clash = [item, other]; break; }
+  }
   return [
     ...(overdue.length ? [{ title: overdue.length + ' overdue', detail: 'Review what needs a new date or an escalation.', item: overdue[0] }] : []),
-    ...(unplanned.length ? [{ title: unplanned.length + ' due within two days without a plan', detail: 'Make room now while there’s still time.', item: unplanned[0] }] : []),
-    ...(clashes.length ? [{ title: 'Calendar overlap in the next 7 days', detail: 'Check the invitations before committing to both.', item: clashes[0] }] : []),
-    ...(planned > available ? [{ title: 'Today is over capacity', detail: 'Move a task or adjust the time available.' }] : []),
+    ...(unplanned.length ? [{ title: unplanned.length + ' due soon without time set before the deadline', detail: 'Make room now while there’s still time.', item: unplanned[0] }] : []),
+    ...(followups.length ? [{ title: 'Follow-up due', detail: followups[0].title, item: followups[0] }] : []),
+    ...(clash ? [{ title: 'Two events overlap', detail: clash.map(item => item.title).join(' / '), day: clash[0].planned }] : []),
+    ...(available !== null && planned > available ? [{ title: 'Today is over capacity', detail: 'Move a task or adjust the time available.' }] : []),
   ];
 }

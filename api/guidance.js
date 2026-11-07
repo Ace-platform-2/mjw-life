@@ -1,26 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
+import { workspaceAccess } from '../server/workspace-auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
   const token = req.headers.authorization?.match(/^Bearer (.+)$/i)?.[1];
   if (!token) return res.status(401).json({ error: 'Sign in first.' });
-  const { VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, OPENAI_API_KEY, OPENAI_MODEL } = process.env;
-  if (!VITE_SUPABASE_URL || !VITE_SUPABASE_PUBLISHABLE_KEY || !OPENAI_API_KEY || !OPENAI_MODEL) {
+  const { OPENAI_API_KEY, OPENAI_MODEL } = process.env;
+  if (!OPENAI_API_KEY || !OPENAI_MODEL) {
     return res.status(503).json({ error: 'AI guidance is not configured.' });
   }
 
   try {
-    const client = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await client.auth.getUser(token);
-    if (error || !data.user) return res.status(401).json({ error: 'Sign in again.' });
-    const memberClient = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, {
-      accessToken: async () => token,
-    });
-    const membership = await memberClient.from('life_workspace_members').select('user_id')
-      .eq('user_id', data.user.id).maybeSingle();
-    if (membership.error || !membership.data) return res.status(403).json({ error: 'Workspace access required.' });
+    const status = await workspaceAccess(token);
+    if (status !== 200) return res.status(status).json({ error: 'Workspace access required.' });
     const input = req.body;
     if (!input || !['available', 'planned', 'due', 'waiting'].every(key =>
       Number.isInteger(input[key]) && input[key] >= 0 && input[key] <= 100000)) {

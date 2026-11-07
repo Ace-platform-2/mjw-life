@@ -1,17 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, CalendarBlank, CalendarDots, ChartBar, Check, Crosshair, Plus, SquaresFour } from '@phosphor-icons/react';
+import { ArrowRight, CalendarBlank, CalendarDots, Check, GearSix, Plus, SquaresFour, Tray } from '@phosphor-icons/react';
 import { areas, dailyPlan, dateKey, money, prettyDate, riskSignals, shiftDay, weekStart } from './model.js';
-import { demo, insertRecords, loadRecords, supabase, writeRecord } from './store.js';
-
-import { GoogleSources } from './GoogleSources.jsx';
+import { availability, eventOn, eventTypes, isEvent, localTime } from './planning.js';
+import { demo, getDocument, insertRecords, loadRecords, removeDocument, storeDocument, supabase, writeRecord, writeRecords } from './store.js';
 import { Calendar } from './Calendar.jsx';
+import { Dialog, Editor } from './Editor.jsx';
+import { Inbox, Records, Settings, inInbox } from './Records.jsx';
+import { Budget } from './Budget.jsx';
+import { Medication } from './Medication.jsx';
+import { downloadFile } from './files.js';
 
 const tabs = [
-  ['today', 'Today', CalendarBlank], ['calendar', 'Calendar', CalendarDots], ['areas', 'Areas', SquaresFour],
-  ['goals', 'Goals', Crosshair], ['review', 'Review', ChartBar],
+  ['today', 'Today', CalendarBlank], ['calendar', 'Calendar', CalendarDots],
+  ['inbox', 'Inbox', Tray], ['areas', 'Areas', SquaresFour],
 ];
 const time = minutes => minutes < 60 ? minutes + ' min' : Math.floor(minutes / 60) + 'h' + (minutes % 60 ? ' ' + minutes % 60 + 'm' : '');
-const cents = value => Math.round(Number(value) * 100);
 
 export function App() {
   const [session, setSession] = useState(undefined);
@@ -82,7 +85,7 @@ export function App() {
 }
 
 function Brand() {
-  return <div><img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="760" height="253" /><div className="subtitle">Command Deck</div></div>;
+  return <img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="760" height="253" />;
 }
 
 function Workspace({ session }) {
@@ -91,13 +94,14 @@ function Workspace({ session }) {
   const [area, setArea] = useState(null);
   const [editor, setEditor] = useState(null);
   const [focus, setFocus] = useState(null);
+  const [choosing, setChoosing] = useState(false);
+  const [calendarDate, setCalendarDate] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [guidance, setGuidance] = useState('');
+  const [guidanceBusy, setGuidanceBusy] = useState(false);
   const [reload, setReload] = useState(0);
   const [day, setDay] = useState(dateKey);
-  const [guidance, setGuidance] = useState('');
-  const [aiBusy, setAiBusy] = useState(false);
-  const [purchase, setPurchase] = useState('');
   const lock = useRef(false);
   const userId = session?.user.id;
 
@@ -115,12 +119,28 @@ function Workspace({ session }) {
     return () => { window.clearInterval(timer); window.removeEventListener('focus', update); };
   }, []);
 
+  function open(item) {
+    setError('');
+    setEditor(item);
+  }
+
   async function save(record, remove = false) {
     if (lock.current || !records) return false;
     lock.current = true;
     setBusy(true);
     setError('');
     try {
+      const parent = records.find(item => item.id === record.relatedId);
+      if (!remove && parent && record.area !== parent.area && ['task', 'note', 'document'].includes(record.kind)) {
+        setError('Choose the same area as the related record.');
+        return false;
+      }
+      if (!remove && record.kind === 'budget' && records.some(item => item.id !== record.id && item.kind === 'budget' &&
+        item.month === record.month && item.title.toLowerCase() === record.title.toLowerCase())) {
+        setError('This category already has a budget for the selected month.');
+        return false;
+      }
+      if (remove && record.kind === 'document' && record.path) await removeDocument(record.path);
       setRecords(await writeRecord(userId, records, record, remove));
       setGuidance('');
       return true;
@@ -133,9 +153,39 @@ function Workspace({ session }) {
     }
   }
 
+  async function saveDocument(record, file) {
+    if (lock.current || !records) return false;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    let upload;
+    try {
+      const parent = records.find(item => item.id === record.relatedId);
+      if (parent && parent.area !== record.area) throw new Error('Choose the same area as the related record.');
+      upload = await storeDocument(userId, file);
+      setRecords(await writeRecord(userId, records, { ...record, ...upload }));
+      return true;
+    } catch (failure) {
+      if (upload) {
+        try { await removeDocument(upload.path); } catch { /* The private object can be cleaned up separately. */ }
+      }
+      setError(failure instanceof Error ? failure.message : 'The document could not be saved.');
+      return false;
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function downloadDocument(item) {
+    try { downloadFile(await getDocument(item.path), item.filename || 'document'); return true; }
+    catch { return false; }
+  }
+
   async function importRecords(items) {
     if (lock.current || !records || !items.length) return false;
     lock.current = true;
+    setBusy(true);
     try {
       setRecords(await insertRecords(userId, records, items));
       return true;
@@ -143,12 +193,15 @@ function Workspace({ session }) {
       return false;
     } finally {
       lock.current = false;
+      setBusy(false);
     }
   }
 
-  function navigate(tab) {
+  function navigate(tab, date = '') {
     setView(tab);
+    setCalendarDate(date);
     setArea(null);
+    setChoosing(false);
     window.scrollTo(0, 0);
   }
 
@@ -158,19 +211,21 @@ function Workspace({ session }) {
   const currentArea = areaList.find(item => item.id === area);
   const areaName = id => areaList.find(item => item.id === id)?.title || 'Unassigned';
   const capacity = list.find(item => item.id === 'capacity:' + day) ||
-    { id: 'capacity:' + day, kind: 'capacity', minutes: 180, essentials: false };
+    { id: 'capacity:' + day, kind: 'capacity', minutes: null, essentials: false };
   const { today, planned, waiting } = dailyPlan(list, day, capacity.essentials);
-  const priority = today[0];
-  const risks = riskSignals(list, day, capacity.minutes, planned);
+  const activeEvents = list.filter(item => isEvent(item) && !item.completed && !item.suggested);
+  const eventsOn = date => activeEvents.map(item => eventOn(item, date)).filter(Boolean);
+  const events = eventsOn(day).sort((a, b) => (a.startsAt || '').localeCompare(b.startsAt || ''));
+  const upcoming = events.find(item => item.startsAt && (!item.endsAt || Date.parse(item.endsAt) > Date.now())) || events.find(item => !item.startsAt);
+  const available = availability(capacity, events, day);
+  const priority = today.find(item => item.id === capacity.focusId) || today.find(item => item.essential || item.due && item.due <= day) || today[0];
+  const candidates = list.filter(item => item.kind === 'task' && !isEvent(item) && !item.suggested && !item.completed &&
+    ['open', 'escalated'].includes(item.status) && (!capacity.essentials || item.essential || item.status === 'escalated'));
+  const riskEvents = Array.from({ length: 8 }, (_, index) => shiftDay(day, index)).flatMap(date => eventsOn(date)
+    .filter(item => item.repeat || item.planned === date || date === day).map(item => ({ ...item, planned: date })));
+  const risks = riskSignals([...list.filter(item => !isEvent(item)), ...riskEvents], day, available, planned);
   const doneToday = list.filter(item => item.kind === 'task' && item.completed === day).length;
-  const todayEvents = list.filter(item => (item.startsAt || item.calendarOnly) && item.planned === day && !item.completed)
-    .sort((a, b) => (a.startsAt || '').localeCompare(b.startsAt || ''));
-  const nearestDraft = list.filter(item => item.suggested && item.planned >= day)
-    .sort((a, b) => a.planned.localeCompare(b.planned))[0];
-  const messages = ['Leave some room for the unexpected.', 'A smaller plan is still a plan.', 'Moving a task is a decision. Give it a better day.', 'Make the next step easy to start.'];
-  const dailyMessage = capacity.essentials ? 'Today can be lighter. Give the essentials your attention.'
-    : doneToday ? 'You’ve already moved something forward today.'
-    : messages[Number(day.slice(-2)) % messages.length];
+  const inboxCount = list.filter(inInbox).length;
   const habits = list.filter(item => item.kind === 'habit');
   const checkinId = id => 'checkin:' + id + ':' + day;
   const checked = id => list.some(item => item.id === checkinId(id));
@@ -181,197 +236,165 @@ function Workspace({ session }) {
   const inWeek = key => key && key >= start && key <= weekEnd;
   const closedThisWeek = list.filter(item => item.kind === 'task' && inWeek(item.completed)).length;
   const habitsThisWeek = list.filter(item => item.kind === 'checkin' && inWeek(item.day)).length;
-  const balance = list.find(item => item.id === 'balance');
-  const bills = list.filter(item => item.kind === 'bill' && !item.paid && item.due <= shiftDay(day, 30));
-  const commitments = bills.reduce((sum, item) => sum + item.amount, 0);
-  const remaining = balance ? balance.amount - commitments : null;
-  const nextUp = [...(!capacity.essentials ? habits.filter(item => !checked(item.id)).slice(0, 1) : []), ...today.slice(1)].slice(0, 4);
+  const nextUp = today.filter(item => item.id !== priority?.id).slice(0, 4);
   const complete = item => save({ ...item, status: 'done', completed: day });
 
+  async function choosePriority(item) {
+    if (lock.current || !records) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const picked = item.planned === day ? [] : [{ ...item, planned: day }];
+      setRecords(await writeRecords(userId, records, [...picked, { ...capacity, focusId: item.id }]));
+      setChoosing(false);
+    } catch {
+      setError('Could not save today’s priority. Try again.');
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+
   async function askGuidance() {
-    setAiBusy(true);
+    setGuidanceBusy(true);
     setGuidance('');
     try {
       const response = await fetch('/api/guidance', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-        body: JSON.stringify({ available: capacity.minutes, planned, due: today.filter(item => item.due && item.due <= day).length, waiting: waiting.length }),
+        body: JSON.stringify({ available, planned, due: today.filter(item => item.due && item.due <= day).length, waiting: waiting.length }),
       });
       const result = await response.json();
       setGuidance(response.ok ? result.text : result.error || 'AI guidance is unavailable.');
     } catch {
       setGuidance('AI guidance is unavailable.');
     } finally {
-      setAiBusy(false);
+      setGuidanceBusy(false);
     }
   }
 
   function renderRow(item) {
     const action = item.suggested ? null : item.kind === 'habit' ? () => toggleHabit(item.id)
-      : item.kind === 'task' && !item.completed ? () => complete(item) : null;
+      : item.kind === 'task' && !isEvent(item) && !item.completed ? () => complete(item) : null;
     const done = item.kind === 'habit' ? checked(item.id) : Boolean(item.completed);
-    const meta = item.kind === 'goal' ? item.progress + ' of ' + item.target + ' milestones'
-      : item.kind === 'bill' ? money(item.amount) + ' · ' + (item.paid ? 'Paid' : prettyDate(item.due))
-      : item.kind === 'task' ? [item.owner, item.due && prettyDate(item.due), ({ waiting: 'Waiting', escalated: 'Escalated', done: 'Done' })[item.status]].filter(Boolean).join(' · ') : '';
+    const meta = isEvent(item) ? [item.startsAt ? localTime(item.startsAt) : 'All day', eventTypes[item.eventType] || 'Event',
+      item.provenance?.includes('RSVP pending') && 'Response needed'].filter(Boolean).join(' · ')
+      : item.kind === 'goal' ? item.progress + ' of ' + item.target + ' milestones'
+      : item.kind === 'expense' ? [money(item.amount), item.day && prettyDate(item.day), item.category].filter(Boolean).join(' · ')
+      : item.kind === 'task' ? [item.owner, item.due && 'Due ' + prettyDate(item.due), item.followup && 'Follow up ' + prettyDate(item.followup),
+        ({ waiting: 'Waiting', escalated: 'Escalated', done: 'Done' })[item.status]].filter(Boolean).join(' · ') : item.day || '';
     return <li className="row" key={item.id}>
       {action && <button type="button" className="checkbox" aria-label={(done ? 'Undo ' : 'Complete ') + item.title} aria-pressed={done} disabled={busy} onClick={action}>{done && <Check weight="bold" />}</button>}
-      <button className="row-detail" onClick={() => setEditor(item)}><span>{item.title}{meta && <small>{meta}</small>}{item.startsAt && <small>{new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit' }).format(new Date(item.startsAt))} SAST</small>}{item.provenance && <small className={item.suggested ? 'draft-label' : ''}>{item.provenance}</small>}</span><ArrowRight size={18} /></button>
+      <button className="row-detail" onClick={() => open(item)}><span>{item.title}{meta && <small>{meta}</small>}</span><ArrowRight size={18} /></button>
     </li>;
   }
 
+  function areaStatus(item) {
+    const due = list.filter(record => record.area === item.id && record.kind === 'task' && !isEvent(record) &&
+      !record.suggested && !record.completed && (record.due && record.due <= day || record.status === 'waiting' && record.followup && record.followup <= day)).length;
+    if (due) return due + (due === 1 ? ' item needs attention' : ' items need attention');
+    const nextDate = Array.from({ length: 30 }, (_, index) => shiftDay(day, index))
+      .find(date => activeEvents.some(record => record.area === item.id && eventOn(record, date)));
+    return nextDate ? 'Next event ' + prettyDate(nextDate) : item.detail;
+  }
+
+  const navView = ['records', 'goals', 'review'].includes(view) ? 'areas' : view;
   return <div className="shell">
     <header className="header"><Brand /><div className="header-actions">
-      {demo ? <span className="demo">Sample data</span> : <button className="quiet" onClick={async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) setError('Sign-out failed. Try again.');
-      }}>Sign out</button>}
-      <button className="add" aria-label="Quick capture" disabled={!records} onClick={() => setEditor({ kind: 'task', area: area || 'mornay' })}><Plus size={29} weight="bold" /></button>
+      {demo && <span className="demo">Sample data</span>}
+      <button className="quiet icon-button" aria-label="Settings" onClick={() => navigate('settings')}><GearSix size={24} /></button>
+      <button className="secondary add-action" disabled={!records} onClick={() => open({ kind: 'task', area: area || 'mornay' })}><Plus size={18} weight="bold" /> Add</button>
     </div></header>
     <main id="main">
       {!records ? <div className="screen"><p role="status">{error || 'Loading your workspace…'}</p>{error && <button className="secondary" onClick={() => { setError(''); setReload(reload + 1); }}>Try again</button>}</div> : <>
         {error && !editor && !focus && <p className="notice" role="alert">{error}</p>}
-        {view === 'today' && <div className="today-grid screen">
+        {view === 'today' && <div className="screen today-grid">
           <section className="main-deck">
-            <p className="eyebrow">{prettyDate(day)} · Your day</p>
-            <div className="pulse"><p>{dailyMessage}</p><small>{doneToday ? doneToday + ' completed today' : 'A fresh start'}</small></div>
-            <h1>Today’s focus</h1>
-            {priority ? <><div className="focus-task">
-              <h2>{priority.title}</h2>
-              <p>{[priority.due === day ? 'Due today' : priority.due && (priority.due < day ? 'Overdue' : 'Due ' + prettyDate(priority.due)), priority.minutes > 0 && time(priority.minutes)].filter(Boolean).join(' · ') || areaName(priority.area)}</p>
-            </div><button className="primary" onClick={() => setFocus(priority)}>Start focus <ArrowRight size={22} weight="bold" /></button></>
-              : <div className="empty"><strong>Your focus is clear.</strong><p>{capacity.essentials ? 'No essentials need your attention right now.' : 'Add a task or plan an existing one for today.'}</p><button className="secondary" onClick={() => setEditor({ kind: 'task', area: 'mornay' })}>Add task</button>{nearestDraft && !capacity.essentials && <button className="quiet" onClick={() => setEditor(nearestDraft)}>Review a draft</button>}</div>}
+            <div className="page-heading"><h1>Today</h1><span className="muted">{prettyDate(day)}</span></div>
+            {upcoming ? <button className="summary-row" onClick={() => open(list.find(item => item.id === upcoming.id) || upcoming)}>
+              <CalendarDots size={22} /><span><small>Next on your calendar · {upcoming.startsAt ? localTime(upcoming.startsAt) : 'All day'}</small><strong>{upcoming.title}</strong></span><ArrowRight size={18} />
+            </button> : <button className="summary-row" onClick={() => navigate('calendar')}><CalendarDots size={22} /><span><strong>Nothing else scheduled today</strong><small>View upcoming days</small></span><ArrowRight size={18} /></button>}
+            {risks.length > 0 && <section className="attention">
+              <h2>Needs attention</h2><ul>{risks.map(risk => <li key={risk.title}><button className="row-detail" onClick={() => risk.day ? navigate('calendar', risk.day) : open(risk.item || capacity)}><span>{risk.title}<small>{risk.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul>
+            </section>}
+            <section className="priority-card">
+              <div className="section-actions"><h2>Today’s priority</h2>{priority && <button className="quiet" onClick={() => setChoosing(true)}>Change</button>}</div>
+              {priority ? <><h3>{priority.title}</h3>
+                <p className="muted">{areaName(priority.area)}{priority.minutes ? ' · ' + time(priority.minutes) : ''}</p>
+                <button className="primary" onClick={() => setFocus(priority)}>Open priority <ArrowRight size={20} /></button></>
+                : <><p className="muted">Choose one thing to move forward.</p><button className="secondary" onClick={() => candidates.length ? setChoosing(true) : open({ kind: 'task', area: 'mornay', planned: day })}>{candidates.length ? 'Pick a task' : 'Add a task'}</button></>}
+            </section>
+            {doneToday > 0 && <p className="success" role="status">{doneToday} {doneToday === 1 ? 'task' : 'tasks'} finished today</p>}
             <div className="workload">
-              <button className="workload-label" aria-label="Edit daily capacity" onClick={() => setEditor(capacity)}><span><strong>{time(planned)}</strong> planned / {time(capacity.minutes)} available</span><span className="small-link">Edit</span></button>
-              <progress aria-label="Daily workload" className={planned > capacity.minutes ? 'over' : ''} max={Math.max(1, capacity.minutes)} value={Math.min(planned, Math.max(1, capacity.minutes))} />
-              {planned > capacity.minutes && <p className="warning">{time(planned - capacity.minutes)} over capacity</p>}
+              <button className="workload-label" onClick={() => open(capacity)}>
+                <span><strong>{time(planned)}</strong> planned{available !== null && ' / ' + time(available) + (capacity.start ? ' free' : ' set by you')}</span>
+                <span className="small-link">{available === null ? 'Set available time' : 'Change time'}</span>
+              </button>
+              {available !== null && <progress aria-label="Daily workload" className={planned > available ? 'over' : ''} max={Math.max(1, available)} value={Math.min(planned, Math.max(1, available))} />}
               {capacity.essentials && <p className="muted">Essentials only is on.</p>}
             </div>
-            <section className="next"><h2>Next up</h2>{nextUp.length ? <ul>{nextUp.map(renderRow)}</ul> : <p className="muted">Nothing else queued.</p>}</section>
           </section>
           <aside className="side-deck">
-            <section className="radar"><h2>Risk radar</h2>
-              {risks.length ? <ul>{risks.map(risk => <li className="row" key={risk.title}><button className="row-detail" onClick={() => setEditor(risk.item || capacity)}><span>{risk.title}<small>{risk.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul> : <p className="muted">No deadline, capacity or calendar risks detected.</p>}
-            </section>
-            <section><h2>On the calendar</h2>{todayEvents.length ? <ul>{todayEvents.map(renderRow)}</ul> : <p className="muted">No calendar entries today.</p>}<button className="quiet" onClick={() => navigate('calendar')}>Open calendar</button></section>
-            <section><h2>Waiting on others</h2>{waiting.length ? <ul>{waiting.map(renderRow)}</ul> : <p className="muted">No outstanding follow-ups.</p>}</section>
-            <section><h2>Guidance</h2><p>{planned > capacity.minutes ? 'Open a planned task to move it or mark it as waiting.' : 'Keep some time free before taking on more.'}</p>
-              {!demo && <><button className="secondary" onClick={askGuidance} disabled={aiBusy}>{aiBusy ? 'Getting guidance…' : 'Ask AI'}</button><small>Shares counts and time estimates only.</small></>}
-              {guidance && <p role="status">{guidance}</p>}
+            {nextUp.length > 0 && <section><h2>Work on today</h2><ul>{nextUp.map(renderRow)}</ul></section>}
+            {waiting.length > 0 && <section><h2>Waiting on others</h2><ul>{waiting.slice(0, 5).map(renderRow)}</ul></section>}
+            <section><h2>This week</h2><p className="muted">{closedThisWeek} completed · {habitsThisWeek} habit check-ins</p>
+              <button className="quiet" onClick={() => navigate('review')}>Weekly review</button>
+              {inboxCount > 0 && <button className="quiet" onClick={() => navigate('inbox')}>Review inbox ({inboxCount})</button>}
+              {session && available !== null && <details><summary>Planning guidance</summary><small>Shares planning totals only.</small>
+                <button className="quiet" disabled={guidanceBusy} onClick={askGuidance}>{guidanceBusy ? 'Preparing guidance…' : 'Ask AI'}</button>
+                {guidance && <p role="status">{guidance}</p>}</details>}
+              {habits.some(item => !checked(item.id)) && !capacity.essentials && <ul>{habits.filter(item => !checked(item.id)).slice(0, 1).map(renderRow)}</ul>}
             </section>
           </aside>
         </div>}
-        {view === 'calendar' && <><Calendar records={list} day={day} areas={areaList} renderRow={renderRow} /><div className="screen inside"><GoogleSources areas={areaList} records={list} importRecords={importRecords} /></div></>}
+        {view === 'calendar' && <Calendar key={calendarDate || 'today'} records={list} day={day} initialDate={calendarDate} areas={areaList} open={open} />}
+        {view === 'inbox' && <Inbox records={list} day={day} open={open} save={save} busy={busy} />}
+        {view === 'settings' && <Settings records={list} areas={areaList} importRecords={importRecords} signOut={demo ? undefined : async () => {
+          const { error } = await supabase.auth.signOut();
+          if (error) setError('Sign-out failed. Try again.');
+        }} />}
+        {view === 'records' && <Records records={list} areas={areaList} day={day} session={session} open={open} downloadDocument={downloadDocument} />}
         {view === 'areas' && <div className="screen inside">
-          <p className="eyebrow">Your workspace</p><h1>{currentArea?.title || 'Life areas'}</h1>
+          <div className="page-heading"><h1>{currentArea?.title || 'Areas'}</h1>
+            {currentArea ? <button className="quiet" onClick={() => setArea(null)}>All areas</button> : <button className="quiet" onClick={() => open({ kind: 'area' })}>Add area</button>}
+          </div>
           {currentArea ? <>
-            <div className="section-actions"><button className="quiet" onClick={() => setArea(null)}>All areas</button><button className="quiet" onClick={() => setEditor(currentArea)}>Edit area</button></div>
-            <p className="muted">{currentArea.detail}</p>
-            {currentArea.id === 'finance' && <section className="finance">
-              <h2>Cash after commitments</h2>
-              <p className={remaining < 0 ? 'warning' : ''}>{remaining === null ? 'Enter your available balance' : money(remaining)}</p>
-              <small>{money(commitments)} in unpaid bills due within 30 days or overdue.{balance && ' Balance updated ' + prettyDate(balance.day) + '.'}</small>
-              <div className="section-actions"><button className="secondary" onClick={() => setEditor(balance || { id: 'balance', kind: 'balance' })}>Update balance</button><button className="secondary" onClick={() => setEditor({ kind: 'bill', area })}>Add bill</button></div>
-              {balance && <label>Check a purchase (R)<input type="number" min="0" max="1000000000" step="0.01" value={purchase} onChange={event => setPurchase(event.target.value)} />{purchase !== '' && Number(purchase) >= 0 && <strong>{money(remaining - cents(purchase))} left after purchase</strong>}</label>}
-            </section>}
-            <ul>{list.filter(item => item.area === area && !item.suggested).map(renderRow)}</ul>
-            {list.some(item => item.area === area && item.suggested) && <details className="drafts"><summary>November planning drafts ({list.filter(item => item.area === area && item.suggested).length})</summary><ul>{list.filter(item => item.area === area && item.suggested).sort((a, b) => a.planned.localeCompare(b.planned)).map(renderRow)}</ul></details>}
-            <button className="secondary" onClick={() => setEditor({ kind: 'task', area })}>Add to {currentArea.title}</button>
-          </> : <><ul>{areaList.map(item => <li className="row" key={item.id}><button className="row-detail" onClick={() => setArea(item.id)}><span>{item.title}<small>{item.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul><button className="secondary" onClick={() => setEditor({ kind: 'area' })}>Add area</button></>}
+            <div className="section-actions"><button className="secondary" onClick={() => open({ kind: 'task', area })}>Add item</button><button className="quiet" onClick={() => open(currentArea)}>Edit area</button></div>
+            {currentArea.id === 'finance' && <Budget records={list} day={day} open={open} save={save} importRecords={importRecords} renderRow={renderRow} busy={busy} />}
+            {(area === 'mornay' || area === 'family' || list.some(item => item.kind === 'medication' && item.area === area)) && <Medication records={list} day={day} area={area} open={open} save={save} busy={busy} />}
+            {area === 'goals' && <button className="secondary" onClick={() => navigate('goals')}>Goals and habits</button>}
+            <section className="feature-section"><h2>Items in this area</h2><ul>{list.filter(item => item.area === area && !item.suggested && !item.dismissed &&
+              ['task', 'event', 'note', 'journal', 'document', 'goal', 'habit'].includes(item.kind)).map(renderRow)}</ul></section>
+          </> : <>
+            <ul>{areaList.map(item => <li className="row" key={item.id}><button className="row-detail" onClick={() => setArea(item.id)}><span>{item.title}<small>{areaStatus(item)}</small></span><ArrowRight size={18} /></button></li>)}</ul>
+            <section className="feature-section"><h2>Browse by type</h2><div className="section-actions"><button className="secondary" onClick={() => navigate('records')}>Notes, journal and files</button><button className="secondary" onClick={() => navigate('goals')}>Goals and habits</button><button className="secondary" onClick={() => navigate('review')}>Weekly review</button></div></section>
+          </>}
         </div>}
-        {view === 'goals' && <div className="screen inside"><p className="eyebrow">Progress</p><h1>Goals &amp; habits</h1>
-          <section><h2>Milestones</h2><ul>{list.filter(item => item.kind === 'goal').map(renderRow)}</ul><button className="secondary" onClick={() => setEditor({ kind: 'goal', area: 'goals' })}>Add goal</button></section>
-          <section><h2>Daily habits</h2><ul>{habits.map(renderRow)}</ul><button className="secondary" onClick={() => setEditor({ kind: 'habit', area: 'mornay' })}>Add habit</button></section>
+        {view === 'goals' && <div className="screen inside"><h1>Goals and habits</h1>
+          <section className="feature-section"><h2>Milestones</h2><ul>{list.filter(item => item.kind === 'goal').map(renderRow)}</ul><button className="secondary" onClick={() => open({ kind: 'goal', area: 'goals' })}>Add goal</button></section>
+          <section className="feature-section"><h2>Daily habits</h2><ul>{habits.map(renderRow)}</ul><button className="secondary" onClick={() => open({ kind: 'habit', area: 'mornay' })}>Add habit</button></section>
         </div>}
-        {view === 'review' && <div className="screen inside"><p className="eyebrow">{prettyDate(start)} to {prettyDate(weekEnd)}</p><h1>Weekly review</h1>
+        {view === 'review' && <div className="screen inside"><h1>Weekly review</h1><p className="muted">{prettyDate(start)} to {prettyDate(weekEnd)}</p>
           <p>{closedThisWeek} tasks completed · {habitsThisWeek} habit check-ins</p>
-          <p className="muted">{list.filter(item => item.kind === 'task' && !item.completed && item.due && item.due < day).length} overdue · {waiting.length} waiting on others</p>
           {review && <p className="review-note">{review.detail}</p>}
-          <button className="primary" onClick={() => setEditor(review || { id: 'review:' + start, kind: 'review', day: start })}>{review ? 'Edit weekly review' : 'Start weekly review'} <ArrowRight size={20} /></button>
-          <section><h2>Past reviews</h2><ul>{list.filter(item => item.kind === 'review' && item.day !== start).sort((a, b) => b.day.localeCompare(a.day)).map(item => <li key={item.id} className="row"><button className="row-detail" onClick={() => setEditor(item)}>Week of {prettyDate(item.day)} <ArrowRight size={18} /></button></li>)}</ul></section>
+          <button className="primary" onClick={() => open(review || { id: 'review:' + start, kind: 'review', day: start })}>{review ? 'Edit weekly review' : 'Write weekly review'} <ArrowRight size={20} /></button>
+          <section className="feature-section"><h2>Past reviews</h2><ul>{list.filter(item => item.kind === 'review' && item.day !== start).sort((a, b) => b.day.localeCompare(a.day)).map(item => <li key={item.id} className="row"><button className="row-detail" onClick={() => open(item)}>Week of {prettyDate(item.day)} <ArrowRight size={18} /></button></li>)}</ul></section>
         </div>}
       </>}
     </main>
-    <nav className="nav" aria-label="Main navigation">{tabs.map(([id, label, Icon]) => <button key={id} aria-current={view === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={25} weight="bold" />{label}</button>)}</nav>
-    {editor && <Editor key={editor.id || 'new'} item={editor} day={day} areas={areaList} busy={busy} error={error} close={() => { setEditor(null); setError(''); }} save={save} />}
-    {focus && <Dialog title="Focus session" close={() => { setFocus(null); setError(''); }} busy={busy}>
-      <h3>{focus.title}</h3><p className="muted">{focus.minutes ? time(focus.minutes) + ' planned' : 'Take the next step when you’re ready.'}</p>
+    <nav className="nav" aria-label="Main navigation">{tabs.map(([id, label, Icon]) => <button key={id} aria-current={navView === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={24} weight="bold" />{label}</button>)}</nav>
+    {editor && <Editor key={[editor.id, editor.kind, editor.relatedId].join(':')} item={editor} day={day} areas={areaList} busy={busy}
+      error={error} close={() => { setEditor(null); setError(''); }} save={save} saveDocument={saveDocument} downloadDocument={downloadDocument}
+      related={editor.id ? list.filter(item => item.area === editor.area && (item.relatedId === editor.id || item.id === editor.relatedId)) : []} open={open} />}
+    {focus && <Dialog title="Today’s priority" close={() => { setFocus(null); setError(''); }} busy={busy}>
+      <h3>{focus.title}</h3><p className="muted">{focus.minutes ? time(focus.minutes) + ' planned' : 'Ready when you are.'}</p>
       {error && <p role="alert">{error}</p>}
       <button className="primary" disabled={busy} onClick={async () => { if (await complete(focus)) setFocus(null); }}>Mark complete <Check size={20} /></button>
-      <button className="quiet" disabled={busy} onClick={() => { setFocus(null); setEditor(focus); }}>Edit or reschedule</button>
+      <button className="quiet" disabled={busy} onClick={() => { setFocus(null); open(focus); }}>Edit or reschedule</button>
+    </Dialog>}
+    {choosing && <Dialog title="Choose today’s priority" close={() => { setChoosing(false); setError(''); }} busy={busy}>
+      {error && <p role="alert">{error}</p>}
+      <ul>{candidates.map(item => <li key={item.id} className="row"><button className="row-detail" disabled={busy} onClick={() => choosePriority(item)}><span>{item.title}<small>{areaName(item.area)}</small></span><ArrowRight size={18} /></button></li>)}</ul>
     </Dialog>}
   </div>;
-}
-
-function Dialog({ title, close, busy, children }) {
-  const dialog = useRef(null);
-  useEffect(() => { dialog.current.showModal(); }, []);
-  return <dialog ref={dialog} onCancel={event => { event.preventDefault(); if (!busy) close(); }} aria-labelledby="dialog-title">
-    <div className="dialog-header"><h2 id="dialog-title">{title}</h2><button className="quiet" type="button" disabled={busy} onClick={close}>Close</button></div>
-    {children}
-  </dialog>;
-}
-
-function Editor({ item, day, areas, busy, error, close, save }) {
-  const [kind, setKind] = useState(item.kind);
-  const [validation, setValidation] = useState('');
-  const title = ({ capacity: 'Daily capacity', review: 'Weekly reflection', balance: 'Available balance' })[kind] || (item.id ? 'Edit ' + kind : 'Quick capture');
-  async function submit(event) {
-    event.preventDefault();
-    const fields = new FormData(event.currentTarget);
-    const get = name => String(fields.get(name) ?? '').trim();
-    setValidation('');
-    const record = { id: item.id || crypto.randomUUID(), kind };
-    if (['task', 'goal', 'habit', 'bill', 'area'].includes(kind)) {
-      record.title = get('title');
-      if (!record.title) return setValidation('Enter a title.');
-    }
-    if (['task', 'goal', 'habit', 'bill'].includes(kind)) record.area = get('area');
-    if (kind === 'task') {
-      Object.assign(record, { due: get('due'), planned: get('planned'), minutes: Number(get('minutes')), owner: get('owner'), status: get('status'), essential: fields.has('essential') });
-      if (item.source) record.source = item.source;
-      if (item.calendarOnly) record.calendarOnly = true;
-      if (item.startsAt) Object.assign(record, { startsAt: item.startsAt, endsAt: item.endsAt });
-      if (item.suggested && !fields.has('acceptDraft')) Object.assign(record, { suggested: true, provenance: item.provenance });
-      else if (item.suggested) record.provenance = 'Accepted planning draft';
-      else if (item.provenance) record.provenance = item.provenance;
-      if (record.status === 'done') record.completed = item.completed || day;
-    }
-    if (kind === 'goal') {
-      Object.assign(record, { progress: Number(get('progress')), target: Number(get('target')) });
-      if (record.progress > record.target) return setValidation('Completed milestones cannot exceed the target.');
-    }
-    if (kind === 'capacity') Object.assign(record, { minutes: Number(get('minutes')), essentials: fields.has('essentials') });
-    if (kind === 'area' || kind === 'review') record.detail = get('detail');
-    if (kind === 'review') record.day = item.day;
-    if (kind === 'balance' || kind === 'bill') record.amount = cents(get('amount'));
-    if (kind === 'balance') record.day = day;
-    if (kind === 'bill') Object.assign(record, { due: get('due'), paid: fields.has('paid') });
-    if (await save(record)) close();
-  }
-  return <Dialog title={title} close={close} busy={busy}>
-    <form onSubmit={submit} key={kind}>
-      {!item.id && ['task', 'goal', 'habit', 'bill'].includes(kind) && <label>Type<select value={kind} onChange={event => setKind(event.target.value)}><option value="task">Task</option><option value="goal">Goal</option><option value="habit">Habit</option><option value="bill">Bill</option></select></label>}
-      {['task', 'goal', 'habit', 'bill', 'area'].includes(kind) && <label>Title<input name="title" defaultValue={item.title} required maxLength={140} /></label>}
-      {['task', 'goal', 'habit', 'bill'].includes(kind) && <label>Area<select name="area" defaultValue={kind === 'bill' ? 'finance' : item.area || 'mornay'}>{areas.map(area => <option key={area.id} value={area.id}>{area.title}</option>)}</select></label>}
-      {(kind === 'task' || kind === 'bill') && <label>Due date<input type="date" name="due" required={kind === 'bill'} defaultValue={item.due} /></label>}
-      {kind === 'task' && <>
-        <label>Plan for<input type="date" name="planned" defaultValue={item.id ? item.planned : day} /></label>
-        {item.suggested && <label className="tick"><input type="checkbox" name="acceptDraft" /> Add to my active plan</label>}
-        {item.provenance && <small>{item.provenance}{item.source && ' · ' + item.source}</small>}
-        <label>Owner<input name="owner" placeholder="Me" maxLength={100} defaultValue={item.owner} /></label>
-        <label>Status<select name="status" defaultValue={item.status || 'open'}><option value="open">Open</option><option value="waiting">Waiting on someone</option><option value="escalated">Escalated</option><option value="done">Done</option></select></label>
-        <label className="tick"><input type="checkbox" name="essential" defaultChecked={item.essential} /> Essential</label>
-      </>}
-      {(kind === 'task' || kind === 'capacity') && <label>{kind === 'task' ? 'Estimated minutes' : 'Available minutes'}<input type="number" name="minutes" min="0" max="1440" defaultValue={item.minutes ?? 0} required /></label>}
-      {kind === 'capacity' && <label className="tick"><input type="checkbox" name="essentials" defaultChecked={item.essentials} /> Show essentials only today</label>}
-      {kind === 'goal' && <><label>Milestone target<input type="number" name="target" min="1" max="1000" defaultValue={item.target ?? 3} required /></label><label>Completed milestones<input type="number" name="progress" min="0" max="1000" defaultValue={item.progress ?? 0} required /></label></>}
-      {(kind === 'area' || kind === 'review') && <label>{kind === 'review' ? 'What worked, what slipped and what will you change?' : 'Description'}<textarea name="detail" defaultValue={item.detail} maxLength={5000} rows="4" required={kind === 'review'} /></label>}
-      {(kind === 'bill' || kind === 'balance') && <label>Amount (R)<input type="number" name="amount" min={kind === 'bill' ? '0' : '-1000000000'} max="1000000000" step="0.01" defaultValue={item.amount === undefined ? '' : item.amount / 100} required /></label>}
-      {kind === 'bill' && <label className="tick"><input type="checkbox" name="paid" defaultChecked={item.paid} /> Paid</label>}
-      {(error || validation) && <p role="alert" className="warning">{validation || error}</p>}
-      <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
-      {item.id && ['task', 'goal', 'habit', 'bill'].includes(kind) && <button type="button" className="quiet" disabled={busy} onClick={async () => {
-        if (window.confirm('Delete this ' + kind + '?') && await save(item, true)) close();
-      }}>Delete {kind}</button>}
-    </form>
-  </Dialog>;
 }

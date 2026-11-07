@@ -65,7 +65,7 @@ async function calendarPreview(token) {
       const planned = event.start?.date || (start && dateKey(new Date(start)));
       if (!planned || rsvp === 'declined' || event.status === 'cancelled') continue;
       entries.push({
-        id: 'gcal:' + event.id, kind: 'task', title: event.summary || 'Calendar event', planned,
+        id: 'gcal:' + event.id, kind: 'event', eventType: 'event', title: event.summary || 'Calendar event', planned,
         ...(start ? { startsAt: start, endsAt: event.end?.dateTime } : { calendarOnly: true }),
         status: 'open', source: 'Google Calendar',
         provenance: rsvp === 'needsAction' ? 'Calendar · RSVP pending' : 'Calendar · scheduled',
@@ -109,7 +109,7 @@ export function GoogleSources({ areas, records, importRecords }) {
       const normal = title => title.replace(/^FW:\s*(\[EXTERNAL\])?\s*/i, '').replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
       const unseen = result.filter(item => !records.some(record => record.id === item.id ||
         (item.source === 'Google Calendar' && record.source === item.source && record.planned === item.planned &&
-          Date.parse(record.startsAt) === Date.parse(item.startsAt) && normal(record.title) === normal(item.title))));
+          (!record.startsAt && !item.startsAt || Date.parse(record.startsAt) === Date.parse(item.startsAt)) && normal(record.title) === normal(item.title))));
       setEntries(unseen);
       if (!unseen.length) setMessage('No new matching items.');
     } catch (error) {
@@ -122,7 +122,8 @@ export function GoogleSources({ areas, records, importRecords }) {
   async function save() {
     setBusy(true);
     try {
-      const batch = entries.filter(item => selected.includes(item.id)).map(item => ({ ...item, area }));
+      const importedAt = new Date().toISOString();
+      const batch = entries.filter(item => selected.includes(item.id)).map(item => ({ ...item, area, importedAt }));
       if (await importRecords(batch)) {
         setEntries(entries.filter(item => !selected.includes(item.id)));
         setSelected([]);
@@ -133,10 +134,12 @@ export function GoogleSources({ areas, records, importRecords }) {
     }
   }
 
+  const lastImport = records.map(item => item.importedAt).filter(Boolean).sort().at(-1);
   return <section className="google-sources">
-    <h2>Google sources</h2>
+    <h2>Connected accounts</h2><h3>Google</h3>
     <p className="muted">Preview the next 30 days from your primary Google Calendar or find Gmail messages to turn into draft follow-ups. You choose what to save.</p>
-    {!clientId ? <p>Google access is pending OAuth setup.</p> : <>
+    {lastImport && <p>Last imported {new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastImport))}</p>}
+    {!clientId ? <p>Google connection is awaiting setup.</p> : <>
       <label>Save to area<select value={area} onChange={event => setArea(event.target.value)}>{areas.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
       <label>Gmail search<input value={query} onChange={event => setQuery(event.target.value)} maxLength={300} /></label>
       <div className="section-actions"><button className="secondary" disabled={busy} onClick={() => preview('calendar')}>Preview Google Calendar</button><button className="secondary" disabled={busy || !query.trim()} onClick={() => preview('gmail')}>Preview Gmail</button></div>

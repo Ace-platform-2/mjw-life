@@ -21,3 +21,13 @@ The initial area names are editable. Personal data is scoped to its owner. Group
 Enable Gmail API and Google Calendar API in the Google Cloud project. Configure the Google Auth consent screen and add your Google account as a test user while the app is in Testing. Create a **Web application** OAuth client with `https://mjw-life.vercel.app` as an authorized JavaScript origin. Set its client ID in the Vercel production variable `VITE_GOOGLE_CLIENT_ID` and redeploy.
 
 Open **Calendar → Google sources**. Each preview asks for only the selected source's read-only scope. Google access tokens are used in memory for that preview. The app reads Gmail subject lines and calendar event metadata and saves only selected items to the signed-in workspace. Preview and import are manual.
+
+## Personal workspace features
+
+Apply the workspace records migration before deploying this version. Notes, journal, calendar events, manual ZAR budgets and medication check-ins use the existing private workspace. Document uploads use the private life-documents bucket, with owner and enrolment checks. An area export includes metadata and record content. Download files separately.
+
+Finance accepts manual bills, category budgets and spending. Optional spending CSV previews run locally in the browser. The template expects date,description,category,amount, ISO dates and positive ZAR expenses.
+
+Medication scheduling and check-ins are user-entered. Calendar reminders are downloadable files. Users should verify notification behaviour in their calendar after importing and update it when their schedule changes.
+
+Audio transcription requires the server-only OPENAI_API_KEY environment variable. The app asks for permission before sending the selected audio. It accepts clips up to 3 MB. Users can also paste and review transcripts without a configured provider.

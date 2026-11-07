@@ -1,54 +1,86 @@
 import React, { useState } from 'react';
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { prettyDate, shiftDay, weekStart } from './model.js';
+import { billOccurrences, eventOn, eventTypes, isEvent, localTime, monthShift } from './planning.js';
 
-const dateLabel = (date, options) => new Intl.DateTimeFormat('en-ZA', {
-  timeZone: 'Africa/Johannesburg', ...options,
-}).format(new Date(date.length === 10 ? date + 'T12:00:00Z' : date));
+const dateLabel = date => new Intl.DateTimeFormat('en-ZA', {
+  timeZone: 'Africa/Johannesburg', month: 'long', year: 'numeric',
+}).format(new Date(date + 'T12:00:00Z'));
 
-export function Calendar({ records, day, areas, renderRow }) {
-  const [cursor, setCursor] = useState(day);
-  const [mode, setMode] = useState('week');
+export function Calendar({ records, day, initialDate, areas, open }) {
+  const [cursor, setCursor] = useState(initialDate || day);
+  const [mode, setMode] = useState('agenda');
   const [area, setArea] = useState('');
   const month = cursor.slice(0, 7);
-  const first = month + '-01';
-  const start = weekStart(mode === 'week' ? cursor : first);
-  const days = Array.from({ length: mode === 'week' ? 7 : 42 }, (_, index) => shiftDay(start, index));
-  const dated = records.filter(item => (item.kind === 'task' || item.kind === 'bill') && (!area || item.area === area));
-  const itemsOn = key => dated.filter(item => item.planned === key || item.due === key)
-    .sort((a, b) => (a.startsAt || 'z').localeCompare(b.startsAt || 'z'));
-  function move(direction) {
-    if (mode === 'week') return setCursor(shiftDay(cursor, direction * 7));
-    const next = new Date(first + 'T12:00:00Z');
-    next.setUTCMonth(next.getUTCMonth() + direction);
-    setCursor(next.toISOString().slice(0, 10));
+  const start = weekStart(mode === 'month' ? month + '-01' : cursor);
+  const days = Array.from({ length: mode === 'month' ? 42 : 7 }, (_, index) => shiftDay(start, index));
+  const active = records.filter(item => !item.suggested && !item.completed && item.status !== 'done' && (!area || item.area === area));
+  const billMonths = new Map();
+  const dates = new Map();
+
+  function itemsOn(key) {
+    if (dates.has(key)) return dates.get(key);
+    const monthKey = key.slice(0, 7);
+    if (!billMonths.has(monthKey)) billMonths.set(monthKey, billOccurrences(records, monthKey));
+    const items = [
+      ...active.flatMap(item => {
+        if (isEvent(item)) {
+          const occurrence = eventOn(item, key);
+          if (!occurrence) return [];
+          const time = occurrence.startsAt && (occurrence.repeat || item.planned === key) ? localTime(occurrence.startsAt) : '';
+          return [{ item, sort: time || '00:00', label: [time || (occurrence.startsAt ? 'Continues today' : 'All day'), eventTypes[item.eventType] || 'Event',
+            item.provenance?.includes('RSVP pending') && 'Response needed'].filter(Boolean).join(' · ') }];
+        }
+        if (item.kind !== 'task') return [];
+        const labels = [item.due === key && 'Due', item.planned === key && 'Work on today', item.followup === key && item.status === 'waiting' && 'Follow up'].filter(Boolean);
+        return labels.length ? [{ item, sort: '24:00', label: labels.join(' · ') }] : [];
+      }),
+      ...billMonths.get(monthKey).filter(item => !item.paid && item.due === key && (!area || item.bill.area === area))
+        .map(({ bill }) => ({ item: bill, sort: '24:00', label: 'Bill due' })),
+    ].sort((a, b) => a.sort.localeCompare(b.sort));
+    dates.set(key, items);
+    return items;
   }
+  const next = Array.from({ length: 30 }, (_, index) => shiftDay(cursor, index + 1)).find(key => itemsOn(key).length);
+  const selected = itemsOn(cursor);
+  const agendaDays = mode === 'agenda' ? [cursor, ...Array.from({ length: 6 }, (_, index) => shiftDay(cursor, index + 1)).filter(key => itemsOn(key).length)] : [cursor];
+  function move(direction) {
+    if (mode === 'month') setCursor(monthShift(month, direction) + '-01');
+    else setCursor(shiftDay(cursor, direction * 7));
+  }
+  const add = date => open({ kind: 'event', area: area || 'mornay', planned: date });
   return <div className="screen calendar-screen">
-    <p className="eyebrow">See what’s coming</p><h1>Calendar</h1>
+    <div className="page-heading"><h1>Calendar</h1><button className="secondary" onClick={() => add(cursor)}>Add event</button></div>
     <div className="calendar-controls">
       <div className="segmented" aria-label="Calendar view">
-        {['week', 'month'].map(item => <button key={item} aria-pressed={mode === item} onClick={() => setMode(item)}>{item === 'week' ? 'Week' : 'Month'}</button>)}
+        {['agenda', 'week', 'month'].map(item => <button key={item} aria-pressed={mode === item} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
-      <label>Life area<select value={area} onChange={event => setArea(event.target.value)}><option value="">All areas</option>{areas.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+      <label>Area<select value={area} onChange={event => setArea(event.target.value)}><option value="">All areas</option>{areas.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
     </div>
     <div className="calendar-heading">
-      <button className="quiet" aria-label={'Previous ' + mode} onClick={() => move(-1)}><CaretLeft size={22} /></button>
-      <h2>{mode === 'month' ? dateLabel(cursor, { month: 'long', year: 'numeric' }) : prettyDate(start) + ' to ' + prettyDate(shiftDay(start, 6))}</h2>
-      <button className="quiet" aria-label={'Next ' + mode} onClick={() => move(1)}><CaretRight size={22} /></button>
+      <button className="quiet" aria-label={mode === 'month' ? 'Previous month' : 'Previous week'} onClick={() => move(-1)}><CaretLeft size={22} /></button>
+      <h2>{mode === 'month' ? dateLabel(cursor) : prettyDate(mode === 'agenda' ? cursor : start) + ' to ' + prettyDate(shiftDay(mode === 'agenda' ? cursor : start, 6))}</h2>
+      <button className="quiet" aria-label={mode === 'month' ? 'Next month' : 'Next week'} onClick={() => move(1)}><CaretRight size={22} /></button>
     </div>
-    <div className="calendar-grid">
+    {mode !== 'agenda' && <div className="calendar-grid">
       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(label => <small key={label}>{label}</small>)}
       {days.map(key => {
         const items = itemsOn(key);
-        const drafts = items.filter(item => item.suggested).length;
-        return <button key={key} aria-pressed={cursor === key} aria-label={prettyDate(key) + ', ' + items.length + ' items'} className={key.slice(0, 7) !== month && mode === 'month' ? 'outside' : ''} onClick={() => setCursor(key)}>
-          <strong>{Number(key.slice(-2))}</strong><small>{items.length ? items.length + (drafts === items.length ? ' draft' : ' items') : ''}</small>
+        return <button key={key} aria-pressed={cursor === key} aria-current={key === day ? 'date' : undefined}
+          aria-label={prettyDate(key) + (key === day ? ', today' : '') + ', ' + items.length + ' scheduled'}
+          className={key.slice(0, 7) !== month && mode === 'month' ? 'outside' : ''} onClick={() => setCursor(key)}>
+          <strong>{Number(key.slice(-2))}</strong>
+          {key === day ? <small>Today</small> : items.length > 0 && <span className="calendar-dot" aria-hidden="true" />}
         </button>;
       })}
-    </div>
-    <section className="agenda"><div className="section-actions"><h2>{prettyDate(cursor)}</h2><button className="quiet" onClick={() => setCursor(day)}>Jump to today</button></div>
-      <small>Drafts are suggestions. Calendar entries marked RSVP pending still need a response.</small>
-      {itemsOn(cursor).length ? <ul>{itemsOn(cursor).map(renderRow)}</ul> : <p className="muted">Nothing on the calendar for this day.</p>}
-    </section>
+    </div>}
+    {cursor !== day && <button className="quiet" onClick={() => setCursor(day)}>Back to today</button>}
+    {agendaDays.map(date => <section className="agenda" key={date}>
+      <h2>{date === day ? 'Today · ' : ''}{prettyDate(date)}</h2>
+      {itemsOn(date).length ? <ul>{itemsOn(date).map(({ item, label }) => <li className="row" key={item.id}>
+        <button className="row-detail" onClick={() => open(item)}><span>{item.title}<small>{label}</small></span></button>
+      </li>)}</ul> : <p className="muted">Nothing scheduled for this date.</p>}
+    </section>)}
+    {!selected.length && next && (mode !== 'agenda' || !agendaDays.includes(next)) && <button className="quiet" onClick={() => setCursor(next)}>Next scheduled day · {prettyDate(next)}</button>}
   </div>;
 }
