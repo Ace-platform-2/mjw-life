@@ -10,7 +10,7 @@ Run `npm ci` and `npm run dev`. Without a Supabase connection, development runs 
 
 1. Apply the migrations in `supabase/migrations` to the MJW Life Supabase project in order.
 2. Set the two public Supabase environment variables from `.env.example` in Vercel. Use the publishable key.
-3. Create or select the owner's account in Supabase Auth, then enrol its user UUID in `public.life_workspace_members` as a project administrator. Keep public sign-up disabled for a dedicated project.
+3. Add the owner's lowercase email to `mjw_private.workspace_invitations` as a project administrator. Email confirmation must be enabled. Add the deployed origin to the Supabase Auth redirect allowlist. The invited owner sets their own password through **Activate invited account**. The database grants membership only after email confirmation. Alternatively, provision an Auth account and enrol its UUID directly in `public.life_workspace_members`.
 4. Deploy from the GitHub repository. Use fictional records for staging. Configure the optional server-side OpenAI variables to enable AI guidance. The AI endpoint accepts only four aggregate planning numbers and verifies workspace access.
 5. Run `npm run build` and `npm run test:sites` to verify the build and static packaging.
 

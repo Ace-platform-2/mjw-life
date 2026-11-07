@@ -14,6 +14,8 @@ export function App() {
   const [session, setSession] = useState(undefined);
   const [membership, setMembership] = useState(null);
   const [authError, setAuthError] = useState('');
+  const [activate, setActivate] = useState(false);
+  const [authNotice, setAuthNotice] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export function App() {
   useEffect(() => {
     if (!userId) return;
     let active = true;
-    supabase.from('life_workspace_members').select('user_id').eq('user_id', userId).maybeSingle()
+    supabase.rpc('activate_life_workspace')
       .then(({ data, error }) => {
         if (active) setMembership({ userId, allowed: Boolean(data), failed: Boolean(error) });
       });
@@ -38,11 +40,19 @@ export function App() {
     const form = new FormData(event.currentTarget);
     setSigningIn(true);
     setAuthError('');
+    setAuthNotice('');
+    const credentials = { email: form.get('email'), password: form.get('password') };
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: form.get('email'), password: form.get('password') });
+      const { error } = activate
+        ? await supabase.auth.signUp({ ...credentials, options: { emailRedirectTo: window.location.origin } })
+        : await supabase.auth.signInWithPassword(credentials);
       if (error) throw error;
+      if (activate) {
+        setActivate(false);
+        setAuthNotice('Check your inbox to confirm your email, then sign in.');
+      }
     } catch {
-      setAuthError('Sign-in failed. Check your account details and try again.');
+      setAuthError(activate ? 'Could not start activation. Try again shortly.' : 'Sign-in failed. Check your account details and try again.');
     } finally {
       setSigningIn(false);
     }
@@ -54,10 +64,15 @@ export function App() {
     {!supabase ? <p>This deployment needs a Supabase connection.</p>
       : session === undefined || (session && membership?.userId !== userId) ? <p>Checking your access…</p>
       : session ? <><p>{membership.failed ? 'Could not verify workspace access.' : 'This account has not been enrolled.'}</p><button className="quiet" onClick={() => supabase.auth.signOut()}>Sign out</button></>
-      : <form onSubmit={signIn}>
+      : <form onSubmit={signIn} key={activate}>
         <label>Email<input name="email" type="email" autoComplete="username" required /></label>
-        <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
-        <button className="primary" disabled={signingIn}>{signingIn ? 'Signing in…' : 'Sign in'}</button>
+        <label>Password<input name="password" type="password" autoComplete={activate ? "new-password" : "current-password"} minLength={activate ? 8 : undefined} required /></label>
+        <button className="primary" disabled={signingIn}>{signingIn ? 'Working…' : activate ? 'Create password' : 'Sign in'}</button>
+        <button className="quiet" type="button" disabled={signingIn} onClick={() => {
+          setActivate(!activate); setAuthError(''); setAuthNotice('');
+        }}>{activate ? 'Back to sign in' : 'Activate invited account'}</button>
+        {activate && <small>Use the email address invited to the workspace.</small>}
+        {authNotice && <p role="status">{authNotice}</p>}
         {authError && <p role="alert">{authError}</p>}
       </form>}
   </main></div>;
