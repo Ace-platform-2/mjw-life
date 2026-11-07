@@ -93,7 +93,7 @@ export function App() {
 
 /** Official MJW Life marks. The ribbon is the platform's recognisable symbol. */
 function Brand() {
-  return <img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="760" height="253" decoding="async" />;
+  return <img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="1200" height="327" decoding="async" />;
 }
 
 function RibbonMark({ className = '' }) {
