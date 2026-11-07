@@ -35,7 +35,7 @@ export function Inbox({ records, day, open, save, busy, refresh }) {
   </div>;
 }
 
-export function Records({ records, areas, day, open, downloadDocument, initialKind = 'note' }) {
+export function Records({ records, areas, day, open, downloadDocument, userId = 'demo', initialKind = 'note' }) {
   const [kind, setKind] = useState(initialKind);
   const [query, setQuery] = useState('');
   const [area, setArea] = useState('');
@@ -48,7 +48,7 @@ export function Records({ records, areas, day, open, downloadDocument, initialKi
   return <div className="screen inside">
     <div className="page-heading"><h1>Records</h1>{kind !== 'audio' && <button className="secondary" onClick={() => open({ kind, area: area || 'mornay' })}>Add {kind === 'journal' ? 'entry' : kind}</button>}</div>
     <div className="segmented record-tabs" aria-label="Record type">{Object.entries(labels).map(([id, label]) => <button key={id} aria-pressed={kind === id} onClick={() => { setKind(id); setMessage(''); }}>{label}</button>)}</div>
-    {kind === 'audio' ? <Transcription areas={areas} records={records} day={day} open={open} /> : <>
+    {kind === 'audio' ? <Transcription areas={areas} records={records} day={day} open={open} ownerId={userId} /> : <>
       <label>Search {labels[kind].toLowerCase()}<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Title, content or tag" /></label>
       <div className="two-fields">
         <label>Area<select value={area} onChange={event => setArea(event.target.value)}><option value="">All areas</option>{areas.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>

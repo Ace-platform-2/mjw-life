@@ -55,3 +55,14 @@ Apply the FPG property migrations before deploying. Keep tenant records, documen
 ## Brand identity
 
 **Primary MJW Life wordmark:** metallic teal/blue ribbon followed by the approved “MJW Life” name. Used in the platform header, sign-in screen and branded outputs. **Standalone ribbon:** official symbol for app installation, splash/loading, favicon and Today navigation. Source artwork is preserved. See `public/brand/BRAND_USAGE.md` for asset replacement and trademark guidelines. The app's current binary assets must be replaced with the approved uploaded artwork if they still contain earlier variants; the documented brand implementation is not a trademark registration.
+
+
+## Two-hour device audio recordings and live transcripts
+
+Open **Records → Audio**. **Record voice note** captures audio for up to 120 minutes, and saves chunks to IndexedDB in the signed-in user's browser profile as recording continues. A saved or partially recoverable recording appears under **Saved recordings on this device**, where **Download audio** saves a separate WebM, M4A or Ogg file depending on browser support. An optional automatic download is attempted when recording stops, but mobile browsers may require the user to tap **Download audio**. Download important recordings before clearing site data or browser storage. The app does not upload recordings to Supabase.
+
+Live dictation updates the transcript textarea while recording on browsers with the Web Speech API. This browser feature is separate from the Wispr Flow subscription. Some browsers, offline environments and devices do not support simultaneous capture and browser speech recognition; audio recording is still available. Select English or Afrikaans explicitly for live recognition. Automatic language detection applies to file transcription only.
+
+On-device file transcription uses the existing Whisper Tiny model and currently accepts audio up to 50 MB and 30 minutes. Long recording support applies to **recording and audio download**, not to Whisper Tiny batch transcription. The transcript can be edited before saving as a note. A repeated-word quality filter rejects obvious hallucinated output. Keep this screen open and prevent the phone from sleeping during recording; browsers can pause background microphone access. Local storage is device-specific and may be evicted or removed by browser settings.
+
+Wispr Flow's official ChatGPT connector is read-only for existing notes and meeting transcripts; it is not a live transcription SDK for a separate web app. Paste or dictate with Wispr Flow into the transcript field where the native Wispr keyboard/app supports it. Do not request Wispr Flow login tokens, patch its application, or use reverse-engineered APIs.

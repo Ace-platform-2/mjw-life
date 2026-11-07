@@ -21,3 +21,6 @@ The supplied metallic teal/blue 3D ribbon is the official standalone MJW Life vi
 Canonical public asset names remain `/brand/mjw-life.webp`, `/brand/mjw-ribbon.png`, `/brand/mjw-app-192.png` and `/brand/mjw-app-512.png`. When provided source images differ from existing repository assets, replace these binary files with the supplied approved brand-art files. The first is transparent ribbon + name; second is standalone ribbon. Check installed app icons and PWA manifest after replacement. Dark navy `#0c1220` is the default brand background. All future platform extensions must keep the ribbon recognisable.
 
 Treat the ribbon as a proprietary brand identifier, not as an already registered trademark. Legal clearance and trademark registration are separate from use in the UI.
+
+
+Audio UX decision (7 Nov 2026): Preserve the 120-minute device-local MediaRecorder flow, streamed IndexedDB audio chunks with a recovery/download list, and live browser transcription in the editable review field. Never advertise the Wispr Flow connector as a live transcription API. Keep separate 30-minute/50 MB limits for on-device Whisper Tiny file processing and note browser background/auto-download limitations. Audio metadata must be scoped to the signed-in workspace owner and not committed to source or uploaded to Supabase.
