@@ -39,3 +39,11 @@ Apply the home and finance migration before deploying. The Inbox **Refresh Gmail
 Today opens the private Emergency card, and Areas opens Family, House and Finance. Bank account numbers are encrypted in the browser with an account vault passphrase and displayed as masked digits. The passphrase is required to reveal a number. Standard exports include the masked digits. Travel and receipt CSV exports are records for review. They are independent of the monthly budget and do not submit a tax return.
 
 Audio transcription uses the pinned multilingual Whisper Tiny model in a browser worker. It begins when a file is chosen or a recording stops. The browser downloads model files on first use. It processes the recording locally and saves the transcript only after review. Set ONNXRUNTIME_NODE_INSTALL_CUDA=skip when installing this project to skip the unused CUDA download.
+
+## FPG Properties
+
+Open **Today → FPG Properties**, **Areas → FPG → Properties** or **Emergency → FPG property contacts**. Search tenant names, shop numbers, contacts and phone numbers across the portfolio, or open a building to see its tenant files and site numbers. Tap a number to call. Add control room, facilities and site office numbers under **Edit property**.
+
+Use the work log for incidents, tenant concerns, maintenance, site reports, leasing, meetings, arrears and vacancies. Entries can link to a tenant and carry an owner, follow-up date and escalation flag. Meetings and dated follow-ups appear in Calendar. Photos are resized on the device and saved in the private documents bucket.
+
+Apply the FPG Properties migration before deploying this feature. Tenant imports go into the enrolled user's workspace in Supabase. Keep real records out of source and demo data.

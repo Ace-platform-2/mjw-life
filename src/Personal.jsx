@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { House, Phone, ShieldPlus, Users } from '@phosphor-icons/react';
+import { ArrowRight, Buildings, House, Phone, ShieldPlus, Users } from '@phosphor-icons/react';
 import { downloadFile } from './files.js';
 import { prettyDate } from './model.js';
 import { advanceHouseItem, homeCategories, tel } from './personal-model.js';
@@ -27,7 +27,7 @@ const emergencyNumbers = [
   ['Mobile emergency', '112'], ['Ambulance', '10177'], ['Police', '10111'], ['Cape Town emergency from a landline', '107'],
 ];
 
-export function Emergency({ records, day, open }) {
+export function Emergency({ records, day, open, openProperties }) {
   const profile = records.find(item => item.kind === 'emergency');
   const contacts = records.filter(item => item.kind === 'person' && item.emergencyContact);
   const meds = records.filter(item => item.kind === 'medication' && item.area === 'mornay' && item.day <= day && (!item.endedOn || day < item.endedOn));
@@ -66,6 +66,9 @@ export function Emergency({ records, day, open }) {
       {emergencyNumbers.map(([label, number]) => <PhoneLink key={number} label={label} number={number} />)}
       <a className="quiet contact-link" href="https://www.westerncape.gov.za/health-wellness/know-who-you-can-call-emergency" target="_blank" rel="noopener noreferrer">Western Cape emergency numbers</a>
     </section>
+    <button className="summary-row property-home-link" onClick={openProperties}>
+      <Buildings size={22} /><span><strong>FPG property contacts</strong><small>Find a site or tenant number</small></span><ArrowRight size={18} />
+    </button>
     {(profile || contacts.length > 0 || meds.length > 0) && <details><summary>Keep an offline copy</summary>
       <p className="muted">The downloaded card includes the private details shown here. Keep it somewhere you can access in an emergency.</p>
       <button className="secondary" onClick={copyCard}>Download emergency card</button></details>}

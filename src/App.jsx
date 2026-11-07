@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, CalendarBlank, CalendarDots, Check, GearSix, Microphone, Plus, Receipt, ShieldPlus, ShoppingCart, SquaresFour, Tray } from '@phosphor-icons/react';
+import { ArrowRight, Buildings, CalendarBlank, CalendarDots, Check, GearSix, Microphone, Plus, Receipt, ShieldPlus, ShoppingCart, SquaresFour, Tray } from '@phosphor-icons/react';
 import { areas, dailyPlan, dateKey, money, prettyDate, riskSignals, shiftDay, weekStart } from './model.js';
 import { availability, eventOn, eventTypes, isEvent, localTime } from './planning.js';
 import { demo, getDocument, getGmailCheckpoint, insertRecords, loadRecords, removeDocument, saveGmailRefresh, storeDocument, supabase, writeRecord, writeRecords } from './store.js';
@@ -12,6 +12,9 @@ import { GmailRefresh } from './GmailRefresh.jsx';
 import { Budget } from './Budget.jsx';
 import { Medication } from './Medication.jsx';
 import { downloadFile } from './files.js';
+import { Properties } from './Properties.jsx';
+import { PropertyEditor } from './PropertyEditor.jsx';
+import { isPropertyRecord, propertyAttention } from './property.js';
 
 const tabs = [
   ['today', 'Today', CalendarBlank], ['calendar', 'Calendar', CalendarDots],
@@ -132,6 +135,11 @@ function Workspace({ session }) {
     setEditor(item);
   }
 
+  function closeEditor() {
+    setEditor(null);
+    setError('');
+  }
+
   async function save(record, remove = false) {
     if (lock.current || !records) return false;
     lock.current = true;
@@ -152,8 +160,8 @@ function Workspace({ session }) {
       setRecords(await writeRecord(userId, records, record, remove));
       setGuidance('');
       return true;
-    } catch {
-      setError('The change could not be saved. Try again.');
+    } catch (failure) {
+      setError(isPropertyRecord(record) && failure instanceof Error ? failure.message : 'The change could not be saved. Try again.');
       return false;
     } finally {
       lock.current = false;
@@ -166,16 +174,28 @@ function Workspace({ session }) {
     lock.current = true;
     setBusy(true);
     setError('');
-    let upload;
+    const photos = Array.isArray(file);
+    const uploads = [];
+    let writing = false;
     try {
       const parent = records.find(item => item.id === record.relatedId);
       if (parent && parent.area !== record.area) throw new Error('Choose the same area as the related record.');
-      upload = await storeDocument(userId, file);
-      setRecords(await writeRecord(userId, records, { ...record, ...upload }));
+      for (const attachment of photos ? file : [file]) uploads.push(await storeDocument(userId, attachment));
+      const updated = photos ? { ...record, photos: [...(record.photos || []), ...uploads] } : { ...record, ...uploads[0] };
+      writing = true;
+      setRecords(await writeRecord(userId, records, updated));
       return true;
     } catch (failure) {
-      if (upload) {
-        try { await removeDocument(upload.path); } catch { /* The private object can be cleaned up separately. */ }
+      if (uploads.length) {
+        const current = writing ? await loadRecords(userId).catch(() => null) : records;
+        const saved = current?.find(item => item.id === record.id);
+        if (saved && uploads.every(upload => saved.path === upload.path || saved.photos?.some(photo => photo.path === upload.path))) {
+          setRecords(current);
+          return true;
+        }
+        if (current) await Promise.allSettled(uploads
+          .filter(upload => saved?.path !== upload.path && !saved?.photos?.some(photo => photo.path === upload.path))
+          .map(upload => removeDocument(upload.path)));
       }
       setError(failure instanceof Error ? failure.message : 'The document could not be saved.');
       return false;
@@ -248,6 +268,8 @@ function Workspace({ session }) {
   const risks = riskSignals([...list.filter(item => !isEvent(item)), ...riskEvents], day, available, planned);
   const houseDue = list.filter(item => item.kind === 'house_item' && !item.completed && (item.priority || item.due && item.due <= day));
   if (houseDue.length) risks.push({ title: 'House items to check', detail: houseDue[0].title, item: houseDue[0] });
+  const workDue = propertyAttention(list, day);
+  if (workDue.length) risks.push({ title: 'FPG property work needs attention', detail: workDue.length + (workDue.length === 1 ? ' entry' : ' entries') + ' · ' + workDue[0].title, item: workDue[0] });
   const doneToday = list.filter(item => item.kind === 'task' && item.completed === day).length;
   const inboxCount = list.filter(inInbox).length;
   const habits = list.filter(item => item.kind === 'habit');
@@ -322,7 +344,7 @@ function Workspace({ session }) {
     return nextDate ? 'Next event ' + prettyDate(nextDate) : item.detail;
   }
 
-  const navView = ['records', 'audio', 'goals', 'review', 'emergency'].includes(view) ? 'areas' : view;
+  const navView = ['records', 'audio', 'goals', 'review', 'emergency', 'properties'].includes(view) ? 'areas' : view;
   if (!records && !error) return <Splash />;
   return <div className="shell">
     <header className="header"><button className="brand-button" aria-label="MJW Life home" onClick={() => navigate('today')}><Brand /></button><div className="header-actions">
@@ -344,6 +366,9 @@ function Workspace({ session }) {
               <button onClick={() => open({ kind: 'tax_receipt', area: 'finance', day })}><Receipt size={22} /> Receipt</button>
               <button onClick={() => open({ kind: 'house_item', area: 'house', category: 'shopping' })}><ShoppingCart size={22} /> Shopping</button>
             </div>
+            <button className="summary-row property-home-link" onClick={() => navigate('properties')}>
+              <Buildings size={22} /><span><strong>FPG Properties</strong><small>Find a tenant or log site work</small></span><ArrowRight size={18} />
+            </button>
             {upcoming ? <button className="summary-row" onClick={() => open(list.find(item => item.id === upcoming.id) || upcoming)}>
               <CalendarDots size={22} /><span><small>Next on your calendar · {upcoming.startsAt ? localTime(upcoming.startsAt) : 'All day'}</small><strong>{upcoming.title}</strong></span><ArrowRight size={18} />
             </button> : <button className="summary-row" onClick={() => navigate('calendar')}><CalendarDots size={22} /><span><strong>Nothing else scheduled today</strong><small>View upcoming days</small></span><ArrowRight size={18} /></button>}
@@ -388,12 +413,16 @@ function Workspace({ session }) {
           if (error) setError('Sign-out failed. Try again.');
         }} />}
         {(view === 'records' || view === 'audio') && <Records key={view} initialKind={view === 'audio' ? 'audio' : 'note'} records={list} areas={areaList} day={day} open={open} downloadDocument={downloadDocument} />}
-        {view === 'emergency' && <Emergency records={list} day={day} open={open} />}
+        {view === 'emergency' && <Emergency records={list} day={day} open={open} openProperties={() => navigate('properties')} />}
+        {view === 'properties' && <Properties records={list} day={day} open={open} back={() => showArea('fpg')} />}
         {view === 'areas' && <div className="screen inside">
           <div className="page-heading"><h1>{currentArea?.title || 'Areas'}</h1>
             {currentArea ? <button className="quiet" onClick={() => setArea(null)}>All areas</button> : <button className="quiet" onClick={() => open({ kind: 'area' })}>Add area</button>}
           </div>
           {currentArea ? <>
+            {area === 'fpg' && <button className="summary-row property-home-link" onClick={() => navigate('properties')}>
+              <Buildings size={22} /><span><strong>Properties</strong><small>Tenant contacts and property work</small></span><ArrowRight size={18} />
+            </button>}
             <div className="section-actions"><button className="secondary" onClick={() => open({ kind: 'task', area })}>Add item</button><button className="quiet" onClick={() => open(currentArea)}>Edit area</button></div>
             {currentArea.id === 'finance' && <>
               <div className="segmented record-tabs" aria-label="Finance view">{Object.entries({ budget: 'Budget', accounts: 'Accounts', travel: 'Travel', sars: 'SARS' }).map(([id, label]) =>
@@ -428,9 +457,12 @@ function Workspace({ session }) {
       </>}
     </main>
     <nav className="nav" aria-label="Main navigation">{tabs.map(([id, label, Icon]) => <button key={id} aria-current={navView === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={24} weight="bold" />{label}</button>)}</nav>
-    {editor && <Editor key={[editor.id, editor.kind, editor.relatedId].join(':')} item={editor} day={day} areas={areaList} busy={busy}
-      error={error} close={() => { setEditor(null); setError(''); }} save={save} saveDocument={saveDocument} downloadDocument={downloadDocument}
-      related={editor.id ? list.filter(item => item.area === editor.area && (item.relatedId === editor.id || item.id === editor.relatedId)) : []} open={open} />}
+    {editor && (isPropertyRecord(editor)
+      ? <PropertyEditor key={editor.id || [editor.kind, editor.buildingId, editor.tenantId, editor.propertyType].join(':')} item={editor}
+        records={list} day={day} open={open} close={closeEditor} save={save} saveDocument={saveDocument} busy={busy} error={error} />
+      : <Editor key={[editor.id, editor.kind, editor.relatedId].join(':')} item={editor} day={day} areas={areaList} busy={busy}
+        error={error} close={closeEditor} save={save} saveDocument={saveDocument} downloadDocument={downloadDocument}
+        related={editor.id ? list.filter(item => item.area === editor.area && (item.relatedId === editor.id || item.id === editor.relatedId)) : []} open={open} />)}
     {focus && <Dialog title="Today’s priority" close={() => { setFocus(null); setError(''); }} busy={busy}>
       <h3>{focus.title}</h3><p className="muted">{focus.minutes ? time(focus.minutes) + ' planned' : 'Ready when you are.'}</p>
       {error && <p role="alert">{error}</p>}

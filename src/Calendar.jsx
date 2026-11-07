@@ -26,12 +26,14 @@ export function Calendar({ records, day, initialDate, areas, open }) {
       ...active.flatMap(item => {
         if (isEvent(item)) {
           const occurrence = eventOn(item, key);
-          if (!occurrence) return [];
+          if (!occurrence) return item.propertyType === 'meeting' && item.due === key && item.status !== 'closed'
+            ? [{ item, sort: '24:00', label: 'FPG meeting · Follow-up due' }] : [];
           const time = occurrence.startsAt && (occurrence.repeat || item.planned === key) ? localTime(occurrence.startsAt) : '';
           return [{ item, sort: time || '00:00', label: [time || (occurrence.startsAt ? 'Continues today' : 'All day'), eventTypes[item.eventType] || 'Event',
             item.provenance?.includes('RSVP pending') && 'Response needed'].filter(Boolean).join(' · ') }];
         }
         if (item.kind === 'house_item' && item.due === key) return [{ item, sort: '24:00', label: 'House · Due' }];
+        if (item.kind === 'fpg_log' && item.due === key && item.status !== 'closed') return [{ item, sort: '24:00', label: 'FPG · Follow-up due' }];
         if (item.kind !== 'task') return [];
         const labels = [item.due === key && 'Due', item.planned === key && 'Work on today', item.followup === key && item.status === 'waiting' && 'Follow up'].filter(Boolean);
         return labels.length ? [{ item, sort: '24:00', label: labels.join(' · ') }] : [];

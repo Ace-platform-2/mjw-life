@@ -9,3 +9,5 @@ When implementing from a selected generated mock, treat that image as the source
 Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
 
 Keep the navy launch screen and ribbon app icon. Keep Emergency and quick capture within one tap of Today. Finance records are manual.
+
+Keep FPG Properties reachable from Today and the FPG area. Tenant contacts, arrears and site photos belong in the signed-in workspace only. Keep real work records out of committed source, fixtures and public assets.

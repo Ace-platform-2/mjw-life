@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { dateKey, sample } from './model.js';
+import { isPropertyRecord } from './property.js';
 
 const { VITE_SUPABASE_URL: url, VITE_SUPABASE_PUBLISHABLE_KEY: key } = import.meta.env;
 export const supabase = url && key ? createClient(url, key) : null;
@@ -22,6 +23,24 @@ export async function loadRecords(userId) {
 }
 
 export async function writeRecord(userId, records, record, remove = false) {
+  if (!remove && !demo && isPropertyRecord(record)) {
+    const { id, kind, ...data } = record;
+    data.propertyVersion = crypto.randomUUID();
+    const exists = records.some(item => item.id === id);
+    const table = supabase.from('life_records');
+    if (exists) {
+      const update = table.update({ kind, data }).eq('user_id', userId).eq('id', id);
+      const version = record.propertyVersion;
+      const checked = version ? update.eq('data->>propertyVersion', version) : update.is('data->>propertyVersion', null);
+      const { data: saved, error } = await checked.select('id').maybeSingle();
+      if (error) throw new Error('Could not save the property record. Try again.', { cause: error });
+      if (!saved) throw new Error('This property record changed on another device. Reload the app and reopen the entry.');
+    } else {
+      const { error } = await table.insert({ user_id: userId, id, kind, data });
+      if (error) throw new Error('Could not save the property record. Try again.', { cause: error });
+    }
+    return [...records.filter(item => item.id !== id), { ...record, propertyVersion: data.propertyVersion }];
+  }
   if (!remove) return writeRecords(userId, records, [record]);
   const next = records.filter(item => item.id !== record.id);
   if (demo) {

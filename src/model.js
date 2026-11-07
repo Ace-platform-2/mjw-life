@@ -1,7 +1,7 @@
 export const areas = [
   ['mornay', 'Mornay', 'Health, habits, rest and personal admin'],
   ['family', 'My Family', 'Family care, relationships and time together'],
-  ['fpg', 'FPG', 'Deadlines, decisions and follow-ups'],
+  ['fpg', 'FPG', 'Properties, deadlines and follow-ups'],
   ['goals', 'Life Goals', 'Personal milestones, Vorexa and MJW'],
   ['house', 'House', 'Shopping, pets, insurance, garden and maintenance'],
   ['finance', 'Finance', 'Bills, commitments and spending decisions'],
