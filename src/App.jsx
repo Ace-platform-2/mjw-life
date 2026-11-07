@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, CalendarBlank, ChartBar, Check, Crosshair, Plus, SquaresFour } from '@phosphor-icons/react';
-import { areas, dailyPlan, dateKey, money, prettyDate, shiftDay, weekStart } from './model.js';
+import { ArrowRight, CalendarBlank, CalendarDots, ChartBar, Check, Crosshair, Plus, SquaresFour } from '@phosphor-icons/react';
+import { areas, dailyPlan, dateKey, money, prettyDate, riskSignals, shiftDay, weekStart } from './model.js';
 import { demo, loadRecords, supabase, writeRecord } from './store.js';
 
+import { Calendar } from './Calendar.jsx';
+
 const tabs = [
-  ['today', 'Today', CalendarBlank], ['areas', 'Areas', SquaresFour],
+  ['today', 'Today', CalendarBlank], ['calendar', 'Calendar', CalendarDots], ['areas', 'Areas', SquaresFour],
   ['goals', 'Goals', Crosshair], ['review', 'Review', ChartBar],
 ];
 const time = minutes => minutes < 60 ? minutes + ' min' : Math.floor(minutes / 60) + 'h' + (minutes % 60 ? ' ' + minutes % 60 + 'm' : '');
@@ -145,6 +147,16 @@ function Workspace({ session }) {
     { id: 'capacity:' + day, kind: 'capacity', minutes: 180, essentials: false };
   const { today, planned, waiting } = dailyPlan(list, day, capacity.essentials);
   const priority = today[0];
+  const risks = riskSignals(list, day, capacity.minutes, planned);
+  const doneToday = list.filter(item => item.kind === 'task' && item.completed === day).length;
+  const todayEvents = list.filter(item => item.startsAt && item.planned === day && !item.completed)
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const nearestDraft = list.filter(item => item.suggested && item.planned >= day)
+    .sort((a, b) => a.planned.localeCompare(b.planned))[0];
+  const messages = ['Leave some room for the unexpected.', 'A smaller plan is still a plan.', 'Moving a task is a decision. Give it a better day.', 'Make the next step easy to start.'];
+  const dailyMessage = capacity.essentials ? 'Today can be lighter. Give the essentials your attention.'
+    : doneToday ? 'You’ve already moved something forward today.'
+    : messages[Number(day.slice(-2)) % messages.length];
   const habits = list.filter(item => item.kind === 'habit');
   const checkinId = id => 'checkin:' + id + ':' + day;
   const checked = id => list.some(item => item.id === checkinId(id));
@@ -180,7 +192,7 @@ function Workspace({ session }) {
   }
 
   function renderRow(item) {
-    const action = item.kind === 'habit' ? () => toggleHabit(item.id)
+    const action = item.suggested ? null : item.kind === 'habit' ? () => toggleHabit(item.id)
       : item.kind === 'task' && !item.completed ? () => complete(item) : null;
     const done = item.kind === 'habit' ? checked(item.id) : Boolean(item.completed);
     const meta = item.kind === 'goal' ? item.progress + ' of ' + item.target + ' milestones'
@@ -188,7 +200,7 @@ function Workspace({ session }) {
       : item.kind === 'task' ? [item.owner, item.due && prettyDate(item.due), ({ waiting: 'Waiting', escalated: 'Escalated', done: 'Done' })[item.status]].filter(Boolean).join(' · ') : '';
     return <li className="row" key={item.id}>
       {action && <button type="button" className="checkbox" aria-label={(done ? 'Undo ' : 'Complete ') + item.title} aria-pressed={done} disabled={busy} onClick={action}>{done && <Check weight="bold" />}</button>}
-      <button className="row-detail" onClick={() => setEditor(item)}><span>{item.title}{meta && <small>{meta}</small>}</span><ArrowRight size={18} /></button>
+      <button className="row-detail" onClick={() => setEditor(item)}><span>{item.title}{meta && <small>{meta}</small>}{item.startsAt && <small>{new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit' }).format(new Date(item.startsAt))} SAST</small>}{item.provenance && <small className={item.suggested ? 'draft-label' : ''}>{item.provenance}</small>}</span><ArrowRight size={18} /></button>
     </li>;
   }
 
@@ -205,13 +217,14 @@ function Workspace({ session }) {
         {error && !editor && !focus && <p className="notice" role="alert">{error}</p>}
         {view === 'today' && <div className="today-grid screen">
           <section className="main-deck">
-            <p className="eyebrow">{prettyDate(day)}</p>
+            <p className="eyebrow">{prettyDate(day)} · Your day</p>
+            <div className="pulse"><p>{dailyMessage}</p><small>{doneToday ? doneToday + ' completed today' : 'A fresh start'}</small></div>
             <h1>Today’s focus</h1>
             {priority ? <><div className="focus-task">
               <h2>{priority.title}</h2>
               <p>{[priority.due === day ? 'Due today' : priority.due && (priority.due < day ? 'Overdue' : 'Due ' + prettyDate(priority.due)), priority.minutes > 0 && time(priority.minutes)].filter(Boolean).join(' · ') || areaName(priority.area)}</p>
             </div><button className="primary" onClick={() => setFocus(priority)}>Start focus <ArrowRight size={22} weight="bold" /></button></>
-              : <div className="empty"><strong>Your focus is clear.</strong><p>{capacity.essentials ? 'No essentials need your attention right now.' : 'Add a task or plan an existing one for today.'}</p><button className="secondary" onClick={() => setEditor({ kind: 'task', area: 'mornay' })}>Add task</button></div>}
+              : <div className="empty"><strong>Your focus is clear.</strong><p>{capacity.essentials ? 'No essentials need your attention right now.' : 'Add a task or plan an existing one for today.'}</p><button className="secondary" onClick={() => setEditor({ kind: 'task', area: 'mornay' })}>Add task</button>{nearestDraft && !capacity.essentials && <button className="quiet" onClick={() => setEditor(nearestDraft)}>Review a draft</button>}</div>}
             <div className="workload">
               <button className="workload-label" aria-label="Edit daily capacity" onClick={() => setEditor(capacity)}><span><strong>{time(planned)}</strong> planned / {time(capacity.minutes)} available</span><span className="small-link">Edit</span></button>
               <progress aria-label="Daily workload" className={planned > capacity.minutes ? 'over' : ''} max={Math.max(1, capacity.minutes)} value={Math.min(planned, Math.max(1, capacity.minutes))} />
@@ -221,6 +234,10 @@ function Workspace({ session }) {
             <section className="next"><h2>Next up</h2>{nextUp.length ? <ul>{nextUp.map(renderRow)}</ul> : <p className="muted">Nothing else queued.</p>}</section>
           </section>
           <aside className="side-deck">
+            <section className="radar"><h2>Risk radar</h2>
+              {risks.length ? <ul>{risks.map(risk => <li className="row" key={risk.title}><button className="row-detail" onClick={() => setEditor(risk.item || capacity)}><span>{risk.title}<small>{risk.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul> : <p className="muted">No deadline, capacity or calendar risks detected.</p>}
+            </section>
+            <section><h2>On the calendar</h2>{todayEvents.length ? <ul>{todayEvents.map(renderRow)}</ul> : <p className="muted">No calendar entries today.</p>}<button className="quiet" onClick={() => navigate('calendar')}>Open calendar</button></section>
             <section><h2>Waiting on others</h2>{waiting.length ? <ul>{waiting.map(renderRow)}</ul> : <p className="muted">No outstanding follow-ups.</p>}</section>
             <section><h2>Guidance</h2><p>{planned > capacity.minutes ? 'Open a planned task to move it or mark it as waiting.' : 'Keep some time free before taking on more.'}</p>
               {!demo && <><button className="secondary" onClick={askGuidance} disabled={aiBusy}>{aiBusy ? 'Getting guidance…' : 'Ask AI'}</button><small>Shares counts and time estimates only.</small></>}
@@ -228,6 +245,7 @@ function Workspace({ session }) {
             </section>
           </aside>
         </div>}
+        {view === 'calendar' && <Calendar records={list} day={day} areas={areaList} renderRow={renderRow} />}
         {view === 'areas' && <div className="screen inside">
           <p className="eyebrow">Your workspace</p><h1>{currentArea?.title || 'Life areas'}</h1>
           {currentArea ? <>
@@ -240,7 +258,8 @@ function Workspace({ session }) {
               <div className="section-actions"><button className="secondary" onClick={() => setEditor(balance || { id: 'balance', kind: 'balance' })}>Update balance</button><button className="secondary" onClick={() => setEditor({ kind: 'bill', area })}>Add bill</button></div>
               {balance && <label>Check a purchase (R)<input type="number" min="0" max="1000000000" step="0.01" value={purchase} onChange={event => setPurchase(event.target.value)} />{purchase !== '' && Number(purchase) >= 0 && <strong>{money(remaining - cents(purchase))} left after purchase</strong>}</label>}
             </section>}
-            <ul>{list.filter(item => item.area === area).map(renderRow)}</ul>
+            <ul>{list.filter(item => item.area === area && !item.suggested).map(renderRow)}</ul>
+            {list.some(item => item.area === area && item.suggested) && <details className="drafts"><summary>November planning drafts ({list.filter(item => item.area === area && item.suggested).length})</summary><ul>{list.filter(item => item.area === area && item.suggested).sort((a, b) => a.planned.localeCompare(b.planned)).map(renderRow)}</ul></details>}
             <button className="secondary" onClick={() => setEditor({ kind: 'task', area })}>Add to {currentArea.title}</button>
           </> : <><ul>{areaList.map(item => <li className="row" key={item.id}><button className="row-detail" onClick={() => setArea(item.id)}><span>{item.title}<small>{item.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul><button className="secondary" onClick={() => setEditor({ kind: 'area' })}>Add area</button></>}
         </div>}
@@ -294,6 +313,11 @@ function Editor({ item, day, areas, busy, error, close, save }) {
     if (['task', 'goal', 'habit', 'bill'].includes(kind)) record.area = get('area');
     if (kind === 'task') {
       Object.assign(record, { due: get('due'), planned: get('planned'), minutes: Number(get('minutes')), owner: get('owner'), status: get('status'), essential: fields.has('essential') });
+      if (item.source) record.source = item.source;
+      if (item.startsAt) Object.assign(record, { startsAt: item.startsAt, endsAt: item.endsAt });
+      if (item.suggested && !fields.has('acceptDraft')) Object.assign(record, { suggested: true, provenance: item.provenance });
+      else if (item.suggested) record.provenance = 'Accepted planning draft';
+      else if (item.provenance) record.provenance = item.provenance;
       if (record.status === 'done') record.completed = item.completed || day;
     }
     if (kind === 'goal') {
@@ -316,6 +340,8 @@ function Editor({ item, day, areas, busy, error, close, save }) {
       {(kind === 'task' || kind === 'bill') && <label>Due date<input type="date" name="due" required={kind === 'bill'} defaultValue={item.due} /></label>}
       {kind === 'task' && <>
         <label>Plan for<input type="date" name="planned" defaultValue={item.id ? item.planned : day} /></label>
+        {item.suggested && <label className="tick"><input type="checkbox" name="acceptDraft" /> Add to my active plan</label>}
+        {item.provenance && <small>{item.provenance}{item.source && ' · ' + item.source}</small>}
         <label>Owner<input name="owner" placeholder="Me" maxLength={100} defaultValue={item.owner} /></label>
         <label>Status<select name="status" defaultValue={item.status || 'open'}><option value="open">Open</option><option value="waiting">Waiting on someone</option><option value="escalated">Escalated</option><option value="done">Done</option></select></label>
         <label className="tick"><input type="checkbox" name="essential" defaultChecked={item.essential} /> Essential</label>

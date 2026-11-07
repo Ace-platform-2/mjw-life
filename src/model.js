@@ -35,7 +35,7 @@ export function sample(day) {
 }
 
 export function dailyPlan(records, day, essentialsOnly) {
-  const tasks = records.filter(item => item.kind === 'task');
+  const tasks = records.filter(item => item.kind === 'task' && !item.suggested && !item.startsAt);
   const dueSoon = item => item.due && item.due <= shiftDay(day, 1);
   const open = tasks.filter(item => (item.status === 'open' || item.status === 'escalated') && !item.completed);
   const planned = open.filter(item => item.planned === day).reduce((total, item) => total + (item.minutes || 0), 0);
@@ -43,4 +43,19 @@ export function dailyPlan(records, day, essentialsOnly) {
     .sort((a, b) => Number(b.essential || b.status === 'escalated') - Number(a.essential || a.status === 'escalated') || (a.due || '9999').localeCompare(b.due || '9999'));
   const waiting = tasks.filter(item => item.status === 'waiting');
   return { today, planned, waiting };
+}
+
+export function riskSignals(records, day, available, planned) {
+  const tasks = records.filter(item => item.kind === 'task' && !item.suggested && !item.completed && item.status !== 'done');
+  const overdue = tasks.filter(item => item.due && item.due < day);
+  const unplanned = tasks.filter(item => item.due >= day && item.due <= shiftDay(day, 2) && !item.planned && !item.startsAt);
+  const events = tasks.filter(item => item.startsAt && item.endsAt && item.planned >= day && item.planned <= shiftDay(day, 7));
+  const clashes = events.filter((item, index) => events.slice(index + 1).some(other =>
+    Date.parse(item.startsAt) < Date.parse(other.endsAt) && Date.parse(other.startsAt) < Date.parse(item.endsAt)));
+  return [
+    ...(overdue.length ? [{ title: overdue.length + ' overdue', detail: 'Review what needs a new date or an escalation.', item: overdue[0] }] : []),
+    ...(unplanned.length ? [{ title: unplanned.length + ' due within two days without a plan', detail: 'Make room now while there’s still time.', item: unplanned[0] }] : []),
+    ...(clashes.length ? [{ title: 'Calendar overlap in the next 7 days', detail: 'Check the invitations before committing to both.', item: clashes[0] }] : []),
+    ...(planned > available ? [{ title: 'Today is over capacity', detail: 'Move a task or adjust the time available.' }] : []),
+  ];
 }
