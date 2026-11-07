@@ -4,6 +4,7 @@ import { availability, billOccurrences, eventOn, medicationTimes, outstandingBil
 import { dailyPlan, riskSignals } from '../src/model.js';
 import { eventCalendarFile, spendingCSV } from '../src/files.js';
 import transcribe from '../api/transcribe.js';
+import guidance from '../api/guidance.js';
 
 const day = '2026-11-07';
 const meeting = (id, start, end) => ({
@@ -72,4 +73,44 @@ test('the transcription endpoint rejects unauthenticated requests', async () => 
   const res = { setHeader() {}, status(code) { result.code = code; return this; }, json(value) { result.value = value; } };
   await transcribe({ method: 'POST', headers: {} }, res);
   assert.equal(result.code, 401);
+});
+
+test('planning guidance works without AI credentials and still requires workspace membership', async t => {
+  const names = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'OPENAI_API_KEY', 'OPENAI_MODEL'];
+  const original = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  t.after(() => {
+    for (const name of names) {
+      if (original[name] === undefined) delete process.env[name];
+      else process.env[name] = original[name];
+    }
+  });
+  process.env.VITE_SUPABASE_URL = 'https://workspace.example.invalid';
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY = 'test-key';
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_MODEL;
+
+  const id = '00000000-0000-4000-8000-000000000001';
+  let enrolled = true;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const request = new URL(url);
+    assert.equal(request.origin, 'https://workspace.example.invalid');
+    assert.equal(new Headers(options.headers).get('authorization'), 'Bearer test-token');
+    if (request.pathname === '/auth/v1/user') return Response.json({ id });
+    assert.equal(request.pathname, '/rest/v1/life_workspace_members');
+    assert.equal(request.searchParams.get('user_id'), 'eq.' + id);
+    return Response.json(enrolled ? [{ user_id: id }] : []);
+  });
+  const result = {};
+  const res = { status(code) { result.code = code; return this; }, json(value) { result.value = value; } };
+  const req = { method: 'POST', headers: { authorization: 'Bearer test-token' },
+    body: { available: 30, planned: 75, due: 1, waiting: 0 } };
+  await guidance(req, res);
+  assert.equal(result.code, 200);
+  assert.match(result.value.text, /45 minutes more planned/);
+
+  await guidance({ ...req, body: { ...req.body, planned: -1 } }, res);
+  assert.equal(result.code, 400);
+  enrolled = false;
+  await guidance(req, res);
+  assert.equal(result.code, 403);
 });

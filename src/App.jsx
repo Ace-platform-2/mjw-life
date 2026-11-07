@@ -331,9 +331,9 @@ function Workspace({ session }) {
         body: JSON.stringify({ available, planned, due: today.filter(item => item.due && item.due <= day).length, waiting: waiting.length }),
       });
       const result = await response.json();
-      setGuidance(response.ok ? result.text : result.error || 'AI guidance is unavailable.');
+      setGuidance(response.ok ? result.text : result.error || 'Planning guidance is unavailable.');
     } catch {
-      setGuidance('AI guidance is unavailable.');
+      setGuidance('Planning guidance is unavailable.');
     } finally {
       setGuidanceBusy(false);
     }
@@ -436,8 +436,8 @@ function Workspace({ session }) {
             <section><h2>Keep going</h2><p className="muted">{closedThisWeek} completed · {habitsThisWeek} habit check-ins</p>
               <button className="quiet" onClick={() => navigate('review')}>Weekly review</button>
               {inboxCount > 0 && <button className="quiet" onClick={() => navigate('inbox')}>Review inbox ({inboxCount})</button>}
-              {session && available !== null && <details><summary>Planning guidance</summary><small>Shares planning totals only.</small>
-                <button className="quiet" disabled={guidanceBusy} onClick={askGuidance}>{guidanceBusy ? 'Preparing guidance…' : 'Ask AI'}</button>
+              {session && available !== null && <details><summary>Planning guidance</summary><small>Uses planning totals only.</small>
+                <button className="quiet" disabled={guidanceBusy} onClick={askGuidance}>{guidanceBusy ? 'Preparing guidance…' : 'Get guidance'}</button>
                 {guidance && <p role="status">{guidance}</p>}</details>}
               {habits.some(item => !checked(item.id)) && !capacity.essentials && <ul>{habits.filter(item => !checked(item.id)).slice(0, 1).map(renderRow)}</ul>}
             </section>

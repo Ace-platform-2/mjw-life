@@ -6,6 +6,12 @@ pdfMake.addVirtualFileSystem(pdfFonts);
 const lines = values => (values || []).join('\n');
 const headers = ['Shop / Unit', 'Tenant', 'Contact', 'Phone', 'Email'];
 
+function fitsOnePage(tenant) {
+  const columns = [tenant.units, [tenant.title, ...(tenant.aliases || [])], tenant.contacts, tenant.phones, tenant.emails];
+  return columns.every(values => (values || []).reduce((lines, value) =>
+    lines + String(value).split(/\r?\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 8)), 0), 0) <= 30);
+}
+
 export function tenantDirectoryPdf(buildings, tenants, day) {
   const date = new Intl.DateTimeFormat('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' })
     .format(new Date(day + 'T12:00:00Z'));
@@ -38,6 +44,8 @@ export function tenantDirectoryPdf(buildings, tenants, day) {
       pageBreak: index ? 'before' : undefined,
       table: {
         headerRows: 2,
+        // Allow oversized records to flow across pages so none of their details are dropped.
+        dontBreakRows: entries.every(fitsOnePage),
         widths: ['11%', '26%', '18%', '20%', '*'],
         body: [
           [{ text: [building.title, building.code, entries.length + (entries.length === 1 ? ' tenant' : ' tenants')]
