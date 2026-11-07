@@ -4,7 +4,7 @@ import { BuildingDocuments } from './BuildingDocuments.jsx';
 import { downloadFile } from './files.js';
 import { money, prettyDate } from './model.js';
 import { localTime } from './planning.js';
-import { buildingMatches, fpgNumberCategories, fpgNumberMatches, isPropertyEntry, leasingStages, matchingPropertyPhone, propertyAttention, propertyPhone, propertyStatuses, propertyTypes, sitePhoneFields, tenantMatches } from './property.js';
+import { buildingMatches, fpgNumberCategories, fpgNumberMatches, isPropertyEntry, leasingStages, matchingPropertyPhone, propertyAttention, propertyPhone, propertyStatuses, propertyTypes, propertyWorkMatches, sitePhoneFields, tenantMatches, vacancyStages } from './property.js';
 
 function CallLink({ value, label }) {
   const href = propertyPhone(value);
@@ -94,24 +94,30 @@ function FpgNumbers({ contacts, open }) {
   </section>;
 }
 
+const registerTabs = { arrears: 'Arrears', vacancy: 'Vacancies', budget: 'Budgets' };
+
 function WorkRows({ entries, buildings, tenantNames, day, open, scoped }) {
   if (!entries.length) return <p className="muted">No entries here yet.</p>;
   return <ul>{entries.map(item => {
     const overdue = item.status !== 'closed' && item.due && item.due < day;
+    const dueToday = item.status !== 'closed' && item.due === day;
     const escalated = item.status !== 'closed' && item.escalated;
     return <li className="row property-log-row" key={item.id}>
       <button className="row-detail" onClick={() => open(item)}>
         <span>{item.title}<small>{[
           propertyTypes[item.propertyType], !scoped && buildings.get(item.buildingId)?.title,
           tenantNames.get(item.tenantId) || item.tenantName || (item.tenantId && 'Former tenant'),
-          item.day && prettyDate(item.day), item.startsAt ? localTime(item.startsAt) : item.time, propertyStatuses[item.status],
+          item.location, item.day && (item.propertyType === 'arrears' ? 'As at ' : '') + prettyDate(item.day),
+          item.startsAt ? localTime(item.startsAt) : item.time, propertyStatuses[item.status],
+          vacancyStages[item.vacancyStage], item.availableFrom && 'Available ' + prettyDate(item.availableFrom),
         ].filter(Boolean).join(' · ')}</small>
         {(item.due || item.owner || item.nextAction) && <small>{[
           item.owner, item.due && 'Follow-up ' + prettyDate(item.due), item.nextAction,
         ].filter(Boolean).join(' · ')}</small>}
-        {(escalated || overdue) && <small className="property-escalated">{[escalated && 'Escalation', overdue && 'Overdue'].filter(Boolean).join(' · ')}</small>}
+        {Boolean(item.followUpNotes?.length) && <small className="property-latest-note">Latest note · {item.followUpNotes.at(-1).text}</small>}
+        {(escalated || overdue || dueToday) && <small className="property-escalated">{[escalated && 'Escalation', overdue && 'Overdue', dueToday && 'Due today'].filter(Boolean).join(' · ')}</small>}
         </span>
-        <span className="property-log-value">{item.propertyType === 'arrears' ? money(item.amount)
+        <span className="property-log-value">{item.propertyType === 'arrears' && Number.isFinite(item.amount) ? money(item.amount)
           : item.propertyType === 'leasing' ? leasingStages[item.stage]
           : item.floorArea ? item.floorArea + ' m²' : item.photos?.length ? <><Camera size={16} /> {item.photos.length}</> : <ArrowRight size={17} />}</span>
       </button>
@@ -119,24 +125,35 @@ function WorkRows({ entries, buildings, tenantNames, day, open, scoped }) {
   })}</ul>;
 }
 
-function WorkLog({ entries, buildings, tenantNames, building, day, open, createEntry, filter, setFilter }) {
-  const { type, status } = filter;
+function WorkLog({ entries, buildings, tenantNames, building, day, open, createEntry, initialType, initialStatus }) {
+  const [type, setType] = useState(initialType || '');
+  const [status, setStatus] = useState(initialStatus);
+  const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(20);
   const scope = entries.filter(row => (!building || row.buildingId === building.id) && (!type || row.propertyType === type));
   const attention = propertyAttention(scope, day);
-  const shown = status === 'attention' ? attention : scope.filter(row =>
+  const matchingStatus = status === 'attention' ? attention : scope.filter(row =>
     status === 'all' || (status === 'closed' ? row.status === 'closed' : row.status !== 'closed'));
+  const shown = matchingStatus.filter(row => propertyWorkMatches(row, buildings.get(row.buildingId), tenantNames.get(row.tenantId), query));
   if (type === 'meeting' && status === 'open') shown.sort((a, b) => (a.startsAt || '').localeCompare(b.startsAt || ''));
-  return <section aria-label="Property work log">
-    <div className="section-actions"><h2>Work log</h2><button className="quiet" onClick={() => createEntry(type || 'maintenance')}>Add entry</button></div>
+  const title = registerTabs[initialType] || 'Work log';
+  const addLabel = { arrears: 'Add arrears case', vacancy: 'Add vacancy', budget: 'Add budget item' }[initialType] || 'Add entry';
+  return <section className="feature-section" aria-label={title}>
+    <div className="section-actions"><h2>{title}</h2><button className="secondary" disabled={!buildings.size}
+      onClick={() => createEntry(type || 'maintenance', Boolean(initialType))}>{addLabel}</button></div>
+    <label className="property-search"><span><MagnifyingGlass size={18} /> Search {title.toLowerCase()}</span>
+      <input type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(20); }}
+        placeholder="Tenant, unit, owner, reference or note" />
+    </label>
     <div className="two-fields property-log-filters">
-      <label>Entry type<select value={type} onChange={event => { setFilter({ ...filter, type: event.target.value }); setLimit(20); }}>
+      {!initialType && <label>Entry type<select value={type} onChange={event => { setType(event.target.value); setLimit(20); }}>
         <option value="">All types</option>{Object.entries(propertyTypes).map(([id, title]) => <option value={id} key={id}>{title}</option>)}
-      </select></label>
-      <label>Status<select value={status} onChange={event => { setFilter({ ...filter, status: event.target.value }); setLimit(20); }}>
+      </select></label>}
+      <label>Status<select value={status} onChange={event => { setStatus(event.target.value); setLimit(20); }}>
         <option value="open">Open work</option><option value="attention">Needs attention ({attention.length})</option><option value="closed">Closed</option><option value="all">All entries</option>
       </select></label>
     </div>
+    <p className="muted" role="status">{shown.length} {shown.length === 1 ? 'entry' : 'entries'}</p>
     <WorkRows entries={shown.slice(0, limit)} buildings={buildings} tenantNames={tenantNames} day={day} open={open} scoped={building} />
     {shown.length > limit && <button className="quiet" onClick={() => setLimit(limit + 20)}>Show more entries</button>}
   </section>;
@@ -157,17 +174,20 @@ function TenantFile({ tenant, building, entries, buildings, tenantNames, day, op
       {tenant.detail && <p className="property-note">{tenant.detail}</p>}
     </section>}
     <section className="feature-section">
-      <div className="section-actions"><h2>Tenant history</h2><button className="primary" onClick={() => createEntry('concern')}>Log for tenant</button></div>
+      <div className="section-actions"><h2>Tenant history</h2><div className="section-actions">
+        <button className="secondary" onClick={() => createEntry('arrears', true)}>Add arrears case</button>
+        <button className="primary" onClick={() => createEntry('concern')}>Log for tenant</button>
+      </div></div>
       <WorkRows entries={entries.filter(row => row.tenantId === tenant.id)} buildings={buildings} tenantNames={tenantNames} day={day} open={open} />
     </section>
   </section>;
 }
 
-export function Properties({ records, day, open, back, downloadDocument, initialTab = 'directory' }) {
+export function Properties({ records, day, open, back, downloadDocument, initialTab = 'directory', initialStatus = 'open' }) {
   const [buildingId, setBuildingId] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [tab, setTab] = useState(initialTab);
-  const [workFilter, setWorkFilter] = useState({ type: '', status: 'open' });
+  const [defaultWorkStatus, setDefaultWorkStatus] = useState(initialStatus);
   const { buildings, tenants, tenantNames, entries } = useMemo(() => {
     const buildings = new Map(records.filter(row => row.kind === 'fpg_building').sort((a, b) => a.title.localeCompare(b.title)).map(row => [row.id, row]));
     const tenants = records.filter(row => row.kind === 'fpg_tenant').sort((a, b) => a.title.localeCompare(b.title));
@@ -186,16 +206,17 @@ export function Properties({ records, day, open, back, downloadDocument, initial
     setBuildingId(id);
     setTenantId('');
     setTab('directory');
-    setWorkFilter({ type: '', status: 'open' });
+    setDefaultWorkStatus('open');
     window.scrollTo(0, 0);
   }
 
-  function createEntry(type) {
-    if (!tenant) {
+  function createEntry(type, fixedType = false, fromQuickCapture = false) {
+    if (fromQuickCapture) {
+      setDefaultWorkStatus('all');
       setTab('work');
-      setWorkFilter({ type: '', status: 'all' });
     }
-    open({ kind: 'fpg_log', propertyType: type, buildingId: tenant?.buildingId || buildingId, tenantId: tenant?.id });
+    open({ kind: 'fpg_log', propertyType: type, buildingId: tenant?.buildingId || buildingId,
+      tenantId: tenant?.id, title: type === 'arrears' && tenant ? tenant.title : '', fixedType });
   }
 
   return <div className="screen property-page">
@@ -210,22 +231,24 @@ export function Properties({ records, day, open, back, downloadDocument, initial
           <li key={name} className="row"><span>{label}</span><CallLink value={building[name]} /></li>)}</ul>
       </section>}
       {buildings.size > 0 && <div className="property-capture" aria-label="Quick property capture">
-        <button className="property-incident" onClick={() => createEntry('incident')}><Warning size={21} /> Log incident</button>
-        <button onClick={() => createEntry('maintenance')}><Wrench size={21} /> Maintenance</button>
-        <button onClick={() => createEntry('site_report')}><Camera size={21} /> Site report</button>
-        <button onClick={() => createEntry('concern')}><Plus size={21} /> Tenant concern</button>
+        <button className="property-incident" onClick={() => createEntry('incident', false, true)}><Warning size={21} /> Log incident</button>
+        <button onClick={() => createEntry('maintenance', false, true)}><Wrench size={21} /> Maintenance</button>
+        <button onClick={() => createEntry('site_report', false, true)}><Camera size={21} /> Site report</button>
+        <button onClick={() => createEntry('concern', false, true)}><Plus size={21} /> Tenant concern</button>
       </div>}
       <div className="segmented record-tabs property-tabs" aria-label="Property view">
         <button aria-pressed={tab === 'directory'} onClick={() => setTab('directory')}>Directory</button>
         <button aria-pressed={tab === 'work'} onClick={() => setTab('work')}>Work log</button>
+        {Object.entries(registerTabs).map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}
         {building
           ? <button aria-pressed={tab === 'documents'} onClick={() => setTab('documents')}>Documents</button>
           : <button aria-pressed={tab === 'numbers'} onClick={() => setTab('numbers')}>FPG numbers</button>}
       </div>
       {tab === 'directory' && <Directory key={buildingId} buildings={buildings} tenants={tenants} building={building} selectBuilding={selectBuilding}
         selectTenant={id => { setTenantId(id); window.scrollTo(0, 0); }} day={day} open={open} />}
-      {tab === 'work' && <WorkLog key={buildingId} entries={entries} buildings={buildings} tenantNames={tenantNames} building={building}
-          day={day} open={open} createEntry={createEntry} filter={workFilter} setFilter={setWorkFilter} />}
+      {(tab === 'work' || registerTabs[tab]) && <WorkLog key={buildingId + ':' + tab + ':' + (tab === 'work' ? defaultWorkStatus : '')} entries={entries} buildings={buildings}
+        tenantNames={tenantNames} building={building} day={day} open={open} createEntry={createEntry}
+        initialType={tab === 'work' ? '' : tab} initialStatus={tab === 'work' ? defaultWorkStatus : 'open'} />}
       {tab === 'documents' && building && <BuildingDocuments building={building} documents={records.filter(item => item.kind === 'fpg_document')}
         open={open} downloadDocument={downloadDocument} />}
       {tab === 'numbers' && <FpgNumbers contacts={records.filter(item => item.kind === 'fpg_contact')} open={open} />}

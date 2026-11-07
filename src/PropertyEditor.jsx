@@ -3,7 +3,7 @@ import { Dialog } from './Editor.jsx';
 import { downloadFile, eventCalendarFile } from './files.js';
 import { localTime } from './planning.js';
 import { getDocument } from './store.js';
-import { fpgNumberCategories, leasingStages, maxPropertyPhotos, preparePropertyPhoto, propertyStatuses, propertyTypes, readFpgNumber, readPropertyRecord, sitePhoneFields } from './property.js';
+import { fpgNumberCategories, leasingStages, maxPropertyPhotos, preparePropertyPhoto, propertyStatuses, propertyTypes, readFpgNumber, readPropertyRecord, sitePhoneFields, vacancyStages } from './property.js';
 
 function PhotoViewer({ photos }) {
   const [selected, setSelected] = useState(null);
@@ -102,11 +102,13 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
   const logForm = !buildingForm && !tenantForm;
   const meeting = logForm && propertyType === 'meeting';
   const locked = busy || processing;
+  const register = ['arrears', 'vacancy', 'budget'].includes(propertyType);
+  const trackNotes = ['arrears', 'vacancy'].includes(propertyType);
   const buildings = records.filter(row => row.kind === 'fpg_building').sort((a, b) => a.title.localeCompare(b.title));
   const tenants = records.filter(row => row.kind === 'fpg_tenant' && row.buildingId === buildingId).sort((a, b) => a.title.localeCompare(b.title));
   const historicalTenant = logForm && item.tenantId && item.buildingId === buildingId && !tenants.some(row => row.id === item.tenantId);
   const savedPhotos = item.photos || [];
-  const title = buildingForm ? (item.id ? 'Edit property' : 'Add property') : tenantForm ? (item.id ? 'Edit tenant' : 'Add tenant') : item.id ? propertyTypes[propertyType] : 'Log property work';
+  const title = buildingForm ? (item.id ? 'Edit property' : 'Add property') : tenantForm ? (item.id ? 'Edit tenant' : 'Add tenant') : item.id ? propertyTypes[propertyType] : item.fixedType ? 'Add ' + propertyTypes[propertyType].toLowerCase() : 'Log property work';
 
   function addPhotos(event) {
     const picked = Array.from(event.target.files || []);
@@ -130,6 +132,7 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
       const record = readPropertyRecord({ ...item, id }, values, propertyType, buildings, tenants);
       const files = [];
       for (const photo of photos) files.push(await preparePropertyPhoto(photo));
+      delete record.fixedType;
       if (await (files.length ? saveDocument(record, files) : save(record))) close();
     } catch (failure) {
       setValidation(failure.message || 'Could not save this entry.');
@@ -141,10 +144,10 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
   return <Dialog title={title} close={close} busy={locked}>
     <form className="property-form" onSubmit={submit}>
       <fieldset disabled={locked}>
-        {logForm && !item.id && <label>Entry type<select value={propertyType} onChange={event => setPropertyType(event.target.value)}>
+        {logForm && !item.id && !item.fixedType && <label>Entry type<select value={propertyType} onChange={event => setPropertyType(event.target.value)}>
           {Object.entries(propertyTypes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
         </select></label>}
-        <Input name="title" label={buildingForm ? 'Property name' : tenantForm ? 'Tenant name' : 'Title'} item={item} maxLength="180" required />
+        <Input name="title" label={buildingForm ? 'Property name' : tenantForm ? 'Tenant name' : propertyType === 'vacancy' ? 'Unit or listing name' : 'Title'} item={item} maxLength="180" required />
         {!buildingForm && <label>Property<select name="buildingId" value={buildingId} required onChange={event => { setBuildingId(event.target.value); setTenantId(''); }}>
             <option value="">Choose a property</option>
             {buildings.map(row => <option key={row.id} value={row.id}>{row.title}</option>)}
@@ -172,19 +175,26 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
               <Input name="end" label="Ends" type="time" item={{ end: item.endsAt ? localTime(item.endsAt) : '' }} required />
             </div>
           </> : <div className="two-fields">
-            <Input name="day" label={propertyType === 'arrears' ? 'Balance as at' : 'Date'} type="date" item={{ day: item.day || day }} required />
+            <Input name="day" label={propertyType === 'arrears' ? 'Record / balance date' : 'Date logged'} type="date" item={{ day: item.day || day }} required />
             <Input name="time" label="Time (SAST)" type="time" item={{ time: item.time || '' }} />
           </div>}
           <Input name="location" label={meeting ? 'Venue or link' : 'Unit or location'} item={item} />
           {propertyType === 'leasing' && <Choice name="stage" label="Leasing stage" value={item.stage || 'enquiry'} choices={leasingStages} />}
-          {propertyType === 'arrears' && <Input name="amount" label="Arrears balance (R)" type="number" min="0" max="999999999.99" step=".01"
-            item={{ amount: item.amount === undefined ? '' : item.amount / 100 }} required />}
-          {propertyType === 'vacancy' && <Input name="floorArea" label="Floor area (m²)" type="number" min=".01" max="9999999" step=".01" item={item} />}
+          {propertyType === 'arrears' && <Input name="amount" label="Arrears balance (R, optional)" type="number" min="0" max="999999999.99" step=".01"
+            item={{ amount: item.amount == null ? '' : item.amount / 100 }} />}
+          {propertyType === 'vacancy' && <>
+            <Choice name="vacancyStage" label="Availability status" value={item.vacancyStage || ''} choices={{ '': 'Choose a stage', ...vacancyStages }} />
+            <div className="two-fields">
+              <Input name="floorArea" label="Floor area (m²)" type="number" min=".01" max="9999999" step=".01" item={item} />
+              <Input name="availableFrom" label="Available from" type="date" item={item} />
+            </div>
+          </>}
         </>}
-        <label>{logForm ? 'Details or observations' : 'Notes'}<textarea name="detail" defaultValue={item.detail} rows="3" maxLength="10000" /></label>
+        <label>{trackNotes ? 'Background notes' : logForm ? 'Details or observations' : 'Notes'}<textarea name="detail" defaultValue={item.detail} rows="3" maxLength="10000" /></label>
         {logForm && <>
           <label className="tick"><input name="escalated" type="checkbox" defaultChecked={item.escalated} /> Needs escalation</label>
-          <details open={Boolean(item.owner || item.due || item.reference || item.nextAction || (item.status && item.status !== 'open'))}>
+          {trackNotes && <label>Add a follow-up note<textarea name="followUpNote" rows="3" maxLength="2000" placeholder="Record the call, response or agreed next step" /></label>}
+          <details open={register || Boolean(item.owner || item.due || item.reference || item.nextAction || (item.status && item.status !== 'open'))}>
             <summary>Follow-up and status</summary>
             <div className="property-form-fields">
               <Choice name="status" label="Status" value={item.status || 'open'} choices={propertyStatuses} />
@@ -211,6 +221,15 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
       {(validation || error) && <p role="alert">{validation || error}</p>}
       <button className="primary" disabled={locked}>{locked ? 'Saving…' : 'Save'}</button>
     </form>
+    {trackNotes && Boolean(item.followUpNotes?.length) && <section className="linked">
+      <h3>Follow-up history</h3>
+      <ul>{[...item.followUpNotes].reverse().map((note, index) => <li className="property-follow-up" key={index}>
+        <time dateTime={note.at}>{new Intl.DateTimeFormat('en-ZA', {
+          dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Johannesburg',
+        }).format(new Date(note.at))}</time>
+        <p className="property-note">{note.text}</p>
+      </li>)}</ul>
+    </section>}
     <PhotoViewer photos={savedPhotos} />
     {tenantForm && item.id && <div className="linked">
       <h3>Linked property work</h3>

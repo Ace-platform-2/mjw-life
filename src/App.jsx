@@ -289,7 +289,7 @@ function Workspace({ session }) {
   const houseDue = list.filter(item => item.kind === 'house_item' && !item.completed && (item.priority || item.due && item.due <= day));
   if (houseDue.length) risks.push({ title: 'House items to check', detail: houseDue[0].title, item: houseDue[0] });
   const workDue = propertyAttention(list, day);
-  if (workDue.length) risks.push({ title: 'FPG property work needs attention', detail: workDue.length + (workDue.length === 1 ? ' entry' : ' entries') + ' · ' + workDue[0].title, item: workDue[0] });
+  if (workDue.length) risks.push({ title: 'FPG property work needs attention', detail: workDue.length + (workDue.length === 1 ? ' entry' : ' entries') + ' · ' + workDue[0].title, view: 'fpg_attention' });
   const doneToday = list.filter(item => item.kind === 'task' && item.completed === day).length;
   const inboxCount = list.filter(inInbox).length;
   const habits = list.filter(item => item.kind === 'habit');
@@ -364,7 +364,7 @@ function Workspace({ session }) {
     return nextDate ? 'Next event ' + prettyDate(nextDate) : item.detail;
   }
 
-  const propertyView = view === 'properties' || view === 'fpg_numbers';
+  const propertyView = ['properties', 'fpg_numbers', 'fpg_attention', 'fpg_budgets'].includes(view);
   const navView = propertyView || ['records', 'audio', 'goals', 'review', 'emergency'].includes(view) ? 'areas' : view;
   if (!records && !error) return <Splash />;
   let editDialog;
@@ -388,7 +388,7 @@ function Workspace({ session }) {
     <header className="header"><button className="brand-button" aria-label="MJW Life home" onClick={() => navigate('today')}><Brand /></button><div className="header-actions">
       {demo && <span className="demo">Sample data</span>}
       <button className="quiet icon-button" aria-label="Settings" onClick={() => navigate('settings')}><GearSix size={24} /></button>
-      <button className="secondary add-action" disabled={!records} onClick={() => open({ kind: 'task', area: area || 'mornay' })}><Plus size={18} weight="bold" /> Add</button>
+      <button className="secondary add-action" disabled={!records} onClick={() => open({ kind: 'task', area: propertyView ? 'fpg' : area || 'mornay' })}><Plus size={18} weight="bold" /> Add</button>
     </div></header>
     <main id="main">
       {!records ? <div className="screen"><p role="status">{error || 'Loading your workspace…'}</p>{error && <button className="secondary" onClick={() => { setError(''); setReload(reload + 1); }}>Try again</button>}</div> : <>
@@ -411,7 +411,7 @@ function Workspace({ session }) {
               <CalendarDots size={22} /><span><small>Next on your calendar · {upcoming.startsAt ? localTime(upcoming.startsAt) : 'All day'}</small><strong>{upcoming.title}</strong></span><ArrowRight size={18} />
             </button> : <button className="summary-row" onClick={() => navigate('calendar')}><CalendarDots size={22} /><span><strong>Nothing else scheduled today</strong><small>View upcoming days</small></span><ArrowRight size={18} /></button>}
             {risks.length > 0 && <section className="attention">
-              <h2>Needs attention</h2><ul>{risks.map(risk => <li key={risk.title}><button className="row-detail" onClick={() => risk.day ? navigate('calendar', risk.day) : open(risk.item || capacity)}><span>{risk.title}<small>{risk.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul>
+              <h2>Needs attention</h2><ul>{risks.map(risk => <li key={risk.title}><button className="row-detail" onClick={() => risk.view ? navigate(risk.view) : risk.day ? navigate('calendar', risk.day) : open(risk.item || capacity)}><span>{risk.title}<small>{risk.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul>
             </section>}
             <section className="priority-card">
               <div className="section-actions"><h2>Today’s priority</h2>{priority && <button className="quiet" onClick={() => setChoosing(true)}>Change</button>}</div>
@@ -454,14 +454,17 @@ function Workspace({ session }) {
         {view === 'emergency' && <Emergency records={list} day={day} open={open} openProperties={() => navigate('properties')}
           openFpgNumbers={() => navigate('fpg_numbers')} />}
         {propertyView && <Properties key={view} records={list} day={day} open={open} back={() => showArea('fpg')}
-          initialTab={view === 'fpg_numbers' ? 'numbers' : 'directory'} downloadDocument={downloadDocument} />}
+          initialTab={{ fpg_numbers: 'numbers', fpg_attention: 'work', fpg_budgets: 'budget' }[view]}
+          initialStatus={view === 'fpg_attention' ? 'attention' : 'open'} downloadDocument={downloadDocument} />}
         {view === 'areas' && <div className="screen inside">
           <div className="page-heading"><h1>{currentArea?.title || 'Areas'}</h1>
             {currentArea ? <button className="quiet" onClick={() => setArea(null)}>All areas</button> : <button className="quiet" onClick={() => open({ kind: 'area' })}>Add area</button>}
           </div>
           {currentArea ? <>
             {area === 'fpg' && <><button className="summary-row property-home-link" onClick={() => navigate('properties')}>
-              <Buildings size={22} /><span><strong>Properties</strong><small>Tenant contacts and property work</small></span><ArrowRight size={18} />
+              <Buildings size={22} /><span><strong>Properties</strong><small>Tenant files, arrears, vacancies and site work</small></span><ArrowRight size={18} />
+            </button><button className="summary-row property-home-link" onClick={() => navigate('fpg_budgets')}>
+              <CalendarDots size={22} /><span><strong>Property budgets</strong><small>Deadlines, submissions and follow-ups</small></span><ArrowRight size={18} />
             </button><button className="summary-row property-home-link" onClick={() => navigate('fpg_numbers')}>
               <Phone size={22} /><span><strong>Important FPG numbers</strong><small>Colleagues, security and service providers</small></span><ArrowRight size={18} />
             </button></>}

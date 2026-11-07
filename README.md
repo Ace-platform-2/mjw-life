@@ -30,8 +30,6 @@ Finance accepts manual bills, category budgets and spending. Optional spending C
 
 Medication scheduling and check-ins are user-entered. Calendar reminders are downloadable files. Users should verify notification behaviour in their calendar after importing and update it when their schedule changes.
 
-Audio transcription requires the server-only OPENAI_API_KEY environment variable. The app asks for permission before sending the selected audio. It accepts clips up to 3 MB. Users can also paste and review transcripts without a configured provider.
-
 ## Inbox, home and finance
 
 Apply the home and finance migration before deploying. The Inbox **Refresh Gmail** action saves the Google mailbox history checkpoint together with new email subjects. It checks the previous seven days on the first run and uses Gmail history on later runs. A configured Google OAuth Web client ID and Gmail read access are required. Access tokens are held only while the Inbox is open. Existing follow-ups stay editable.
@@ -49,5 +47,7 @@ Select **Documents** on a building to add floorplans and other files. You can ch
 The directory exports the full building or portfolio tenant list as a landscape A4 PDF. **Edit tenant** supports changing the property and deleting a tenant file. Linked work history stays in the work log. **Important FPG numbers** is available from Emergency, the FPG area and the property directory.
 
 Use the work log for incidents, tenant concerns, maintenance, site reports, leasing, meetings, arrears and vacancies. Entries can link to a tenant and carry an owner, follow-up date and escalation flag. Meetings and dated follow-ups appear in Calendar. Photos are resized on the device and saved in the private documents bucket.
+
+Open **Arrears**, **Vacancies** or **Budgets** in the property directory to see the portfolio or one building. Arrears and vacancy records keep dated follow-up notes. Use **Needs attention** to see due or escalated work. Property budget items track submissions and follow-ups.
 
 Apply the FPG property migrations before deploying. Keep tenant records, documents and phonebook entries in the enrolled user's workspace and out of source and demo data.

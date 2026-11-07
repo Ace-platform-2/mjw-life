@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildingMatches, fpgNumberMatches, isPropertyEntry, matchingPropertyPhone, propertyAttention, propertyPhone, readFpgNumber, readPropertyRecord, tenantMatches } from '../src/property.js';
+import { buildingMatches, fpgNumberMatches, isPropertyEntry, matchingPropertyPhone, propertyAttention, propertyPhone, propertyWorkMatches, readFpgNumber, readPropertyRecord, tenantMatches } from '../src/property.js';
 
 const building = { id: 'test-building', title: 'Example Centre', code: 'EX', securityPhone: '021 000 0000' };
 const tenant = { id: 'test-tenant', buildingId: building.id, title: 'Example Café', units: ['A-12'],
@@ -75,4 +75,29 @@ test('FPG numbers can be left blank and searched by category or either phone num
   assert.equal(fpgNumberMatches(contact, 'Facilities'), false);
   values.set('phone', 'wrong number');
   assert.throws(() => readFpgNumber(item, values), /phone numbers/);
+});
+
+test('building registers preserve dated follow-ups and separate unknown balances from zero', () => {
+  const arrears = readPropertyRecord({ kind: 'fpg_log', id: 'arrears' },
+    fields({ followUpNote: 'Sent payment plan' }), 'arrears', [building], [tenant]);
+  assert.equal(arrears.amount, null);
+  assert.equal(arrears.followUpNotes[0].text, 'Sent payment plan');
+  assert.ok(Number.isFinite(Date.parse(arrears.followUpNotes[0].at)));
+
+  const updated = readPropertyRecord(arrears, fields({ amount: '0', followUpNote: 'Called accounts' }), 'arrears', [building], [tenant]);
+  assert.equal(updated.amount, 0);
+  assert.deepEqual(updated.followUpNotes.map(note => note.text), ['Sent payment plan', 'Called accounts']);
+  assert.deepEqual(readPropertyRecord(updated, fields({ amount: '0' }), 'arrears', [building], [tenant]).followUpNotes, updated.followUpNotes);
+  assert.equal(propertyWorkMatches(updated, building, tenant.title, 'cafe accounts'), true);
+  assert.equal(propertyWorkMatches(updated, building, tenant.title, 'unrelated unit'), false);
+});
+
+test('legacy vacancies remain editable and new vacancy availability is stored', () => {
+  const legacy = { id: 'vacancy', kind: 'fpg_log', propertyType: 'vacancy', buildingId: building.id };
+  const vacancy = readPropertyRecord(legacy, fields({ vacancyStage: 'under_offer', availableFrom: '2026-12-01',
+    floorArea: '125.50', followUpNote: 'Viewing booked' }), 'vacancy', [building], [tenant]);
+  assert.equal(vacancy.vacancyStage, 'under_offer');
+  assert.equal(vacancy.availableFrom, '2026-12-01');
+  assert.equal(vacancy.floorArea, 125.5);
+  assert.equal(readPropertyRecord(legacy, fields(), 'vacancy', [building], [tenant]).vacancyStage, '');
 });

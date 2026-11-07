@@ -9,12 +9,25 @@ export const propertyTypes = {
   meeting: 'Meeting',
   arrears: 'Arrears',
   vacancy: 'Vacancy',
+  budget: 'Property budget',
 };
 
 export const propertyStatuses = { open: 'Open', in_progress: 'In progress', waiting: 'Waiting', closed: 'Closed' };
 export const leasingStages = {
   enquiry: 'Enquiry', proposal: 'Proposal', negotiation: 'Negotiation', signing: 'Signing', handover: 'Handover',
 };
+export const vacancyStages = {
+  upcoming: 'Upcoming vacancy', available: 'Available', under_offer: 'Under offer', let: 'Let',
+};
+
+export function propertyWorkMatches(item, building, tenantName, query) {
+  const text = searchText([
+    item.title, item.location, item.reference, item.owner, item.detail, item.nextAction,
+    item.tenantName, tenantName, building?.title, building?.code, ...(item.followUpNotes || []).map(note => note.text),
+  ].join(' '));
+  return searchText(query).split(' ').every(term => text.includes(term));
+}
+
 export const sitePhoneFields = { securityPhone: 'Security / control room', facilitiesPhone: 'Facilities', officePhone: 'Site office' };
 export const fpgNumberCategories = {
   facilities: 'Facilities', managers: 'Property managers', security: 'Security', services: 'Service providers', other: 'Other',
@@ -130,15 +143,24 @@ export function readPropertyRecord(item, values, propertyType, buildings, tenant
       startsAt: day + 'T' + start + ':00+02:00', endsAt: day + 'T' + end + ':00+02:00' });
   }
   if (propertyType === 'leasing') record.stage = get('stage');
+  if (propertyType === 'arrears' || propertyType === 'vacancy') {
+    const note = get('followUpNote');
+    if (note.length > 2000) throw new Error('Keep the follow-up note under 2,000 characters.');
+    if (note) record.followUpNotes = [...(record.followUpNotes || []), { text: note, at: new Date().toISOString() }];
+  }
   if (propertyType === 'arrears') {
     const balance = get('amount');
-    if (!/^(?:\d{1,9}(?:\.\d{1,2})?|\.\d{1,2})$/.test(balance)) throw new Error('Enter the arrears balance in rand.');
-    record.amount = Math.round(Number(balance) * 100);
+    if (balance && !/^(?:\d{1,9}(?:\.\d{1,2})?|\.\d{1,2})$/.test(balance)) throw new Error('Enter the arrears balance in rand.');
+    record.amount = balance ? Math.round(Number(balance) * 100) : null;
   }
   if (propertyType === 'vacancy') {
     const area = get('floorArea');
-    if (area && !(Number(area) > 0)) throw new Error('Enter a floor area greater than zero.');
+    if (area && !(Number(area) >= .01 && Number(area) <= 9999999)) throw new Error('Enter a floor area between 0.01 and 9,999,999 m².');
+    const stage = get('vacancyStage');
+    if (stage && !Object.hasOwn(vacancyStages, stage)) throw new Error('Choose a vacancy stage.');
     record.floorArea = area ? Number(area) : null;
+    record.vacancyStage = stage;
+    record.availableFrom = get('availableFrom');
   }
   return record;
 }

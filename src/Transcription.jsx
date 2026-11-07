@@ -64,8 +64,11 @@ export function Transcription({ areas, records, day, open }) {
 
   async function transcribe(source) {
     if (!source || locked.current) return;
-    setFile(source);
     if (!source.size || source.size > maxSize) { setMessage('Choose an audio file up to 50 MB.'); return; }
+    if (source !== file) {
+      setFile(source);
+      setContent('');
+    }
     locked.current = true;
     const current = ++job.current;
     setWorking(true);
@@ -146,7 +149,7 @@ export function Transcription({ areas, records, day, open }) {
       {message && <p role="status">{message}</p>}
       {working ? <button className="quiet" onClick={cancel}>Cancel transcription</button>
         : file && <button className="quiet" disabled={recording || requesting} onClick={() => transcribe(file)}>Transcribe again</button>}
-      <label>Review or paste transcript<textarea value={content} onChange={event => setContent(event.target.value)} rows="7" maxLength="30000" /></label>
+      <label>Review or paste transcript<textarea value={content} readOnly={working} onChange={event => setContent(event.target.value)} rows="7" maxLength="30000" /></label>
       <label>Area<select value={area} onChange={event => { setArea(event.target.value); setEventId(''); }}>{areas.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
       <label>Link to an event (optional)<select value={eventId} onChange={event => setEventId(event.target.value)}><option value="">None</option>
         {records.filter(item => item.area === area && isEvent(item)).map(item => <option key={item.id} value={item.id}>{item.planned} · {item.title}</option>)}</select></label>

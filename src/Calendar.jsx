@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { propertyTypes } from './property.js';
 import { prettyDate, shiftDay, weekStart } from './model.js';
 import { billOccurrences, eventOn, eventTypes, isEvent, localTime, monthShift } from './planning.js';
 
@@ -33,7 +34,7 @@ export function Calendar({ records, day, initialDate, areas, open }) {
             item.provenance?.includes('RSVP pending') && 'Response needed'].filter(Boolean).join(' · ') }];
         }
         if (item.kind === 'house_item' && item.due === key) return [{ item, sort: '24:00', label: 'House · Due' }];
-        if (item.kind === 'fpg_log' && item.due === key && item.status !== 'closed') return [{ item, sort: '24:00', label: 'FPG · Follow-up due' }];
+        if (item.kind === 'fpg_log' && item.due === key && item.status !== 'closed') return [{ item, sort: '24:00', label: 'FPG · ' + (propertyTypes[item.propertyType] || 'Property work') + ' due' }];
         if (item.kind !== 'task') return [];
         const labels = [item.due === key && 'Due', item.planned === key && 'Work on today', item.followup === key && item.status === 'waiting' && 'Follow up'].filter(Boolean);
         return labels.length ? [{ item, sort: '24:00', label: labels.join(' · ') }] : [];
