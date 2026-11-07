@@ -3,6 +3,7 @@ export const areas = [
   ['family', 'My Family', 'Family care, relationships and time together'],
   ['fpg', 'FPG', 'Deadlines, decisions and follow-ups'],
   ['goals', 'Life Goals', 'Personal milestones, Vorexa and MJW'],
+  ['house', 'House', 'Shopping, pets, insurance, garden and maintenance'],
   ['finance', 'Finance', 'Bills, commitments and spending decisions'],
 ].map(([id, title, detail]) => ({ id, kind: 'area', title, detail }));
 

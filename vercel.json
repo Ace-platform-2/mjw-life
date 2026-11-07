@@ -6,5 +6,6 @@
     "api/transcribe.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "installCommand": "ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci"
 }

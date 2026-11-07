@@ -31,6 +31,7 @@ export function Calendar({ records, day, initialDate, areas, open }) {
           return [{ item, sort: time || '00:00', label: [time || (occurrence.startsAt ? 'Continues today' : 'All day'), eventTypes[item.eventType] || 'Event',
             item.provenance?.includes('RSVP pending') && 'Response needed'].filter(Boolean).join(' · ') }];
         }
+        if (item.kind === 'house_item' && item.due === key) return [{ item, sort: '24:00', label: 'House · Due' }];
         if (item.kind !== 'task') return [];
         const labels = [item.due === key && 'Due', item.planned === key && 'Work on today', item.followup === key && item.status === 'waiting' && 'Follow up'].filter(Boolean);
         return labels.length ? [{ item, sort: '24:00', label: labels.join(' · ') }] : [];

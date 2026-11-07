@@ -5,10 +5,10 @@ const scopes = {
   calendar: 'https://www.googleapis.com/auth/calendar.events.readonly',
   gmail: 'https://www.googleapis.com/auth/gmail.readonly',
 };
-const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+export const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 let scriptReady;
 
-function loadGoogle() {
+export function loadGoogle() {
   if (window.google?.accounts?.oauth2) return Promise.resolve();
   if (!scriptReady) scriptReady = new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -21,7 +21,7 @@ function loadGoogle() {
   return scriptReady;
 }
 
-async function requestToken(source) {
+export async function requestToken(source) {
   await loadGoogle();
   return new Promise((resolve, reject) => {
     const google = window.google.accounts.oauth2;
@@ -31,7 +31,7 @@ async function requestToken(source) {
       include_granted_scopes: false,
       callback: response => {
         if (response.error || !response.access_token) reject(new Error('Google access was not granted.'));
-        else resolve(response.access_token);
+        else resolve({ token: response.access_token, expires: Date.now() + Number(response.expires_in || 300) * 1000 });
       },
       error_callback: () => reject(new Error('The Google consent window closed or could not open.')),
     });
@@ -104,7 +104,7 @@ export function GoogleSources({ areas, records, importRecords }) {
     setEntries([]);
     setSelected([]);
     try {
-      const token = await requestToken(source);
+      const { token } = await requestToken(source);
       const result = source === 'calendar' ? await calendarPreview(token) : await gmailPreview(token, query.trim());
       const normal = title => title.replace(/^FW:\s*(\[EXTERNAL\])?\s*/i, '').replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
       const unseen = result.filter(item => !records.some(record => record.id === item.id ||

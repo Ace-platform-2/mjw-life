@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0c1220" />
   <link rel="icon" type="image/png" href="/brand/mjw-ribbon.png" />
-  <link rel="apple-touch-icon" href="/brand/mjw-ribbon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/brand/mjw-app-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <style>body{margin:0;background:#0c1220}.boot-screen{min-height:100dvh;display:grid;place-items:center}.boot-screen img{width:124px;height:124px}</style>
   <title>MJW Life</title>
 </head>
-<body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>
+<body><div id="root"><div class="boot-screen" role="status"><img src="/brand/mjw-ribbon.png" width="124" height="124" alt="Opening MJW Life" /></div></div><script type="module" src="/src/main.jsx"></script></body>
 </html>

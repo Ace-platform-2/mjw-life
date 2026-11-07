@@ -98,3 +98,21 @@ export async function getDocument(path) {
   if (error) throw error;
   return data;
 }
+
+export async function getGmailCheckpoint(userId, id) {
+  if (demo) return (await loadRecords()).find(record => record.id === id) || null;
+  const { data, error } = await supabase.from('life_records').select('data').eq('user_id', userId)
+    .eq('id', id).eq('kind', 'gmail_sync').maybeSingle();
+  if (error) throw new Error('Could not read the Gmail checkpoint.');
+  return data?.data || null;
+}
+
+export async function saveGmailRefresh(userId, key, expected, checkpoint, messages) {
+  if (demo) throw new Error('Sign in to refresh Gmail.');
+  const { data, error } = await supabase.rpc('save_life_gmail_refresh', {
+    p_key: key, p_expected: expected ?? null, p_checkpoint: checkpoint, p_messages: messages,
+  });
+  if (error) throw new Error('The emails could not be saved. The previous checkpoint is still active.');
+  if (!data) throw new Error('Another refresh finished first. Refresh again.');
+  return loadRecords(userId);
+}

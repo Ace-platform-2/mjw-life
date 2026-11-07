@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { DetailFields, detailRecord, isDetail } from './DetailFields.jsx';
 import { dateKey } from './model.js';
 import { downloadFile, eventCalendarFile } from './files.js';
 import { eventTypes, isEvent, localTime } from './planning.js';
@@ -8,8 +9,10 @@ export const labels = {
   bill: 'Bill', budget: 'Budget category', expense: 'Spending', medication: 'Medication',
   goal: 'Goal', habit: 'Habit', area: 'Area', capacity: 'Available time',
   review: 'Weekly review', balance: 'Bank balance',
+  person: 'Family member', emergency: 'Emergency card', house_item: 'House item',
+  bank_account: 'Bank account', travel: 'Travel entry', tax_receipt: 'Receipt',
 };
-const capture = ['task', 'event', 'note', 'journal', 'document', 'goal', 'habit', 'bill', 'expense', 'medication'];
+const capture = ['task', 'event', 'note', 'journal', 'document', 'goal', 'habit', 'bill', 'expense', 'medication', 'house_item', 'travel', 'tax_receipt'];
 
 export function Dialog({ title, close, busy, children }) {
   const dialog = useRef(null);
@@ -28,17 +31,19 @@ export function Editor({ item, day, areas, busy, error, close, save, saveDocumen
   const [kind, setKind] = useState(isEvent(item) ? 'event' : item.kind);
   const [type, setType] = useState(item.eventType || 'event');
   const [validation, setValidation] = useState('');
+  const [processing, setProcessing] = useState(false);
   const [times, setTimes] = useState(item.times || ['']);
   const [allDay, setAllDay] = useState(Boolean(item.calendarOnly || (item.id && isEvent(item) && !item.startsAt)));
   const [scheduled, setScheduled] = useState(Boolean(item.start || item.end || !Number.isFinite(item.minutes)));
-  const titled = capture.includes(kind) || kind === 'area' || kind === 'budget';
-  const assigned = capture.includes(kind);
+  const titled = capture.includes(kind) || kind === 'area' || kind === 'budget' || isDetail(kind);
+  const assigned = capture.includes(kind) && !isDetail(kind);
   const title = item.id ? 'Edit ' + labels[kind].toLowerCase() : capture.includes(kind) ? 'Add ' + labels[kind].toLowerCase() : labels[kind];
   const endDayDefault = item.endDay || (item.endsAt ? dateKey(new Date(item.endsAt)) : '');
   const amount = ['bill', 'balance', 'budget', 'expense'].includes(kind);
 
   async function submit(event) {
     event.preventDefault();
+    if (processing || busy) return;
     const fields = new FormData(event.currentTarget);
     const get = name => String(fields.get(name) ?? '').trim();
     setValidation('');
@@ -48,6 +53,17 @@ export function Editor({ item, day, areas, busy, error, close, save, saveDocumen
       if (!record.title) return setValidation('Enter a title.');
     }
     if (assigned) record.area = get('area');
+    if (isDetail(kind)) {
+      setProcessing(true);
+      try {
+        await detailRecord(record, fields, day);
+        const file = fields.get('file');
+        const success = kind === 'tax_receipt' && file?.size ? await saveDocument(record, file) : await save(record);
+        if (success) close();
+      } catch (error) { setValidation(error.message || 'Could not save this entry.'); }
+      finally { setProcessing(false); }
+      return;
+    }
     if (kind === 'task') {
       Object.assign(record, { due: get('due'), planned: get('planned'), minutes: Number(get('minutes')), owner: get('owner'),
         status: get('status'), essential: fields.has('essential'), followup: get('followup'), detail: get('detail') });
@@ -116,12 +132,12 @@ export function Editor({ item, day, areas, busy, error, close, save, saveDocumen
   }
 
   const note = (label = 'Notes', required = false) => <label>{label}<textarea name="detail" defaultValue={item.detail} maxLength={30000} rows="4" required={required} /></label>;
-  return <Dialog title={title} close={close} busy={busy}>
+  return <Dialog title={title} close={close} busy={busy || processing}>
     <form onSubmit={submit} key={kind}>
       {!item.id && capture.includes(kind) && <label>Type<select value={kind} onChange={event => { setKind(event.target.value); setValidation(''); }}>
         {capture.map(id => <option key={id} value={id}>{labels[id]}</option>)}
       </select></label>}
-      {titled && <label>{kind === 'budget' ? 'Category' : kind === 'medication' ? 'Medication name' : 'Title'}<input name="title" defaultValue={item.title} required maxLength={180} /></label>}
+      {titled && <label>{({ budget: 'Category', medication: 'Medication name', person: 'Full name', emergency: 'Your name', bank_account: 'Account nickname', travel: 'Purpose or label', tax_receipt: 'Supplier or expense' })[kind] || 'Title'}<input name="title" defaultValue={item.title} required maxLength={180} /></label>}
       {assigned && <label>Area<select name="area" defaultValue={['bill', 'expense'].includes(kind) ? 'finance' : item.area || 'mornay'}>{areas.map(area => <option key={area.id} value={area.id}>{area.title}</option>)}</select></label>}
       {kind === 'task' && <details open={item.id || item.planned || item.suggested ? true : undefined}>
         <summary>Schedule and details</summary>
@@ -186,9 +202,13 @@ export function Editor({ item, day, areas, busy, error, close, save, saveDocumen
         {item.url && !item.path && /^https:\/\//i.test(item.url) && <a className="quiet" href={item.url} target="_blank" rel="noopener noreferrer">Open document link</a>}
         {note('Description')}
       </>}
+      {isDetail(kind) && <DetailFields kind={kind} item={{ ...item, day: item.day || day }} day={day} />}
+      {kind === 'tax_receipt' && item.path && <button className="quiet" type="button" onClick={async () => {
+        if (!await downloadDocument(item)) setValidation('Could not download this receipt.');
+      }}>Download receipt</button>}
       {(error || validation) && <p role="alert" className="warning">{validation || error}</p>}
-      <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
-      {item.id && !['capacity', 'area'].includes(kind) && <button type="button" className="quiet" disabled={busy} onClick={async () => {
+      <button className="primary" disabled={busy || processing}>{busy || processing ? 'Saving…' : 'Save'}</button>
+      {item.id && !['capacity', 'area', 'emergency'].includes(kind) && <button type="button" className="quiet" disabled={busy} onClick={async () => {
         if (window.confirm('Delete this ' + labels[kind].toLowerCase() + '?') && await save(item, true)) close();
       }}>Delete {labels[kind].toLowerCase()}</button>}
     </form>
@@ -196,7 +216,7 @@ export function Editor({ item, day, areas, busy, error, close, save, saveDocumen
       <p className="muted">Download this event and import it into your calendar. Check that its reminder is enabled there.</p>
       <button className="secondary" type="button" onClick={() => downloadFile(eventCalendarFile(item), 'mjw-event.ics', 'text/calendar')}>Download event reminder</button>
     </details>}
-    {item.id && ['event', 'task', 'note', 'journal'].includes(kind) && <section className="linked">
+    {item.id && ['event', 'task', 'note', 'journal', 'house_item', 'tax_receipt'].includes(kind) && <section className="linked">
       <h3>Related items</h3>
       <div className="section-actions">
         {kind === 'note' && <button className="quiet" disabled={busy} onClick={() => open({ kind: 'task', area: item.area, relatedId: item.id })}>Create follow-up</button>}

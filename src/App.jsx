@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, CalendarBlank, CalendarDots, Check, GearSix, Plus, SquaresFour, Tray } from '@phosphor-icons/react';
+import { ArrowRight, CalendarBlank, CalendarDots, Check, GearSix, Microphone, Plus, Receipt, ShieldPlus, ShoppingCart, SquaresFour, Tray } from '@phosphor-icons/react';
 import { areas, dailyPlan, dateKey, money, prettyDate, riskSignals, shiftDay, weekStart } from './model.js';
 import { availability, eventOn, eventTypes, isEvent, localTime } from './planning.js';
-import { demo, getDocument, insertRecords, loadRecords, removeDocument, storeDocument, supabase, writeRecord, writeRecords } from './store.js';
+import { demo, getDocument, getGmailCheckpoint, insertRecords, loadRecords, removeDocument, saveGmailRefresh, storeDocument, supabase, writeRecord, writeRecords } from './store.js';
 import { Calendar } from './Calendar.jsx';
 import { Dialog, Editor } from './Editor.jsx';
 import { Inbox, Records, Settings, inInbox } from './Records.jsx';
+import { BankAccounts, TaxLog, TravelLog } from './FinanceLogs.jsx';
+import { Emergency, Family, HouseLists } from './Personal.jsx';
+import { GmailRefresh } from './GmailRefresh.jsx';
 import { Budget } from './Budget.jsx';
 import { Medication } from './Medication.jsx';
 import { downloadFile } from './files.js';
@@ -65,10 +68,10 @@ export function App() {
   }
 
   if (demo || (userId && membership?.userId === userId && membership.allowed)) return <Workspace key={session?.user.id || 'demo'} session={session} />;
+  if (supabase && (session === undefined || (session && membership?.userId !== userId))) return <Splash />;
   return <div className="gate"><Brand /><main>
     <h1>Private workspace</h1>
     {!supabase ? <p>This deployment needs a Supabase connection.</p>
-      : session === undefined || (session && membership?.userId !== userId) ? <p>Checking your access…</p>
       : session ? <><p>{membership.failed ? 'Could not verify workspace access.' : 'This account has not been enrolled.'}</p><button className="quiet" onClick={() => supabase.auth.signOut()}>Sign out</button></>
       : <form onSubmit={signIn} key={activate}>
         <label>Email<input name="email" type="email" autoComplete="username" required /></label>
@@ -88,10 +91,15 @@ function Brand() {
   return <img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="760" height="253" />;
 }
 
+function Splash() {
+  return <div className="boot-screen" role="status"><img src="/brand/mjw-ribbon.png" alt="MJW Life" width="124" height="124" /><span className="sr-only">Opening your workspace</span></div>;
+}
+
 function Workspace({ session }) {
   const [records, setRecords] = useState(null);
   const [view, setView] = useState('today');
   const [area, setArea] = useState(null);
+  const [financeView, setFinanceView] = useState('budget');
   const [editor, setEditor] = useState(null);
   const [focus, setFocus] = useState(null);
   const [choosing, setChoosing] = useState(false);
@@ -140,7 +148,7 @@ function Workspace({ session }) {
         setError('This category already has a budget for the selected month.');
         return false;
       }
-      if (remove && record.kind === 'document' && record.path) await removeDocument(record.path);
+      if (remove && ['document', 'tax_receipt'].includes(record.kind) && record.path) await removeDocument(record.path);
       setRecords(await writeRecord(userId, records, record, remove));
       setGuidance('');
       return true;
@@ -197,6 +205,20 @@ function Workspace({ session }) {
     }
   }
 
+  async function commitGmail(key, expected, checkpoint, messages) {
+    if (lock.current) throw new Error('A workspace change is in progress. Try again.');
+    lock.current = true;
+    setBusy(true);
+    try { setRecords(await saveGmailRefresh(userId, key, expected, checkpoint, messages)); }
+    finally { lock.current = false; setBusy(false); }
+  }
+
+  function showArea(id, subview = 'budget') {
+    navigate('areas');
+    setArea(id);
+    setFinanceView(subview);
+  }
+
   function navigate(tab, date = '') {
     setView(tab);
     setCalendarDate(date);
@@ -224,6 +246,8 @@ function Workspace({ session }) {
   const riskEvents = Array.from({ length: 8 }, (_, index) => shiftDay(day, index)).flatMap(date => eventsOn(date)
     .filter(item => item.repeat || item.planned === date || date === day).map(item => ({ ...item, planned: date })));
   const risks = riskSignals([...list.filter(item => !isEvent(item)), ...riskEvents], day, available, planned);
+  const houseDue = list.filter(item => item.kind === 'house_item' && !item.completed && (item.priority || item.due && item.due <= day));
+  if (houseDue.length) risks.push({ title: 'House items to check', detail: houseDue[0].title, item: houseDue[0] });
   const doneToday = list.filter(item => item.kind === 'task' && item.completed === day).length;
   const inboxCount = list.filter(inInbox).length;
   const habits = list.filter(item => item.kind === 'habit');
@@ -298,9 +322,10 @@ function Workspace({ session }) {
     return nextDate ? 'Next event ' + prettyDate(nextDate) : item.detail;
   }
 
-  const navView = ['records', 'goals', 'review'].includes(view) ? 'areas' : view;
+  const navView = ['records', 'audio', 'goals', 'review', 'emergency'].includes(view) ? 'areas' : view;
+  if (!records && !error) return <Splash />;
   return <div className="shell">
-    <header className="header"><Brand /><div className="header-actions">
+    <header className="header"><button className="brand-button" aria-label="MJW Life home" onClick={() => navigate('today')}><Brand /></button><div className="header-actions">
       {demo && <span className="demo">Sample data</span>}
       <button className="quiet icon-button" aria-label="Settings" onClick={() => navigate('settings')}><GearSix size={24} /></button>
       <button className="secondary add-action" disabled={!records} onClick={() => open({ kind: 'task', area: area || 'mornay' })}><Plus size={18} weight="bold" /> Add</button>
@@ -310,7 +335,15 @@ function Workspace({ session }) {
         {error && !editor && !focus && <p className="notice" role="alert">{error}</p>}
         {view === 'today' && <div className="screen today-grid">
           <section className="main-deck">
-            <div className="page-heading"><h1>Today</h1><span className="muted">{prettyDate(day)}</span></div>
+            <div className="page-heading"><div><small>{prettyDate(day)}</small><h1>Today</h1></div>
+              <button className="emergency-shortcut" onClick={() => navigate('emergency')}><ShieldPlus size={19} /> Emergency</button>
+            </div>
+            <div className="quick-actions" aria-label="Quick capture">
+              <button onClick={() => open({ kind: 'task', area: 'mornay' })}><Plus size={22} /> Task</button>
+              <button onClick={() => navigate('audio')}><Microphone size={22} /> Voice</button>
+              <button onClick={() => open({ kind: 'tax_receipt', area: 'finance', day })}><Receipt size={22} /> Receipt</button>
+              <button onClick={() => open({ kind: 'house_item', area: 'house', category: 'shopping' })}><ShoppingCart size={22} /> Shopping</button>
+            </div>
             {upcoming ? <button className="summary-row" onClick={() => open(list.find(item => item.id === upcoming.id) || upcoming)}>
               <CalendarDots size={22} /><span><small>Next on your calendar · {upcoming.startsAt ? localTime(upcoming.startsAt) : 'All day'}</small><strong>{upcoming.title}</strong></span><ArrowRight size={18} />
             </button> : <button className="summary-row" onClick={() => navigate('calendar')}><CalendarDots size={22} /><span><strong>Nothing else scheduled today</strong><small>View upcoming days</small></span><ArrowRight size={18} /></button>}
@@ -337,7 +370,7 @@ function Workspace({ session }) {
           <aside className="side-deck">
             {nextUp.length > 0 && <section><h2>Work on today</h2><ul>{nextUp.map(renderRow)}</ul></section>}
             {waiting.length > 0 && <section><h2>Waiting on others</h2><ul>{waiting.slice(0, 5).map(renderRow)}</ul></section>}
-            <section><h2>This week</h2><p className="muted">{closedThisWeek} completed · {habitsThisWeek} habit check-ins</p>
+            <section><h2>Keep going</h2><p className="muted">{closedThisWeek} completed · {habitsThisWeek} habit check-ins</p>
               <button className="quiet" onClick={() => navigate('review')}>Weekly review</button>
               {inboxCount > 0 && <button className="quiet" onClick={() => navigate('inbox')}>Review inbox ({inboxCount})</button>}
               {session && available !== null && <details><summary>Planning guidance</summary><small>Shares planning totals only.</small>
@@ -348,26 +381,38 @@ function Workspace({ session }) {
           </aside>
         </div>}
         {view === 'calendar' && <Calendar key={calendarDate || 'today'} records={list} day={day} initialDate={calendarDate} areas={areaList} open={open} />}
-        {view === 'inbox' && <Inbox records={list} day={day} open={open} save={save} busy={busy} />}
+        {view === 'inbox' && <Inbox records={list} day={day} open={open} save={save} busy={busy}
+          refresh={<GmailRefresh records={list} areas={areaList} readCheckpoint={key => getGmailCheckpoint(userId, key)} commit={commitGmail} settings={() => navigate('settings')} />} />}
         {view === 'settings' && <Settings records={list} areas={areaList} importRecords={importRecords} signOut={demo ? undefined : async () => {
           const { error } = await supabase.auth.signOut();
           if (error) setError('Sign-out failed. Try again.');
         }} />}
-        {view === 'records' && <Records records={list} areas={areaList} day={day} session={session} open={open} downloadDocument={downloadDocument} />}
+        {(view === 'records' || view === 'audio') && <Records key={view} initialKind={view === 'audio' ? 'audio' : 'note'} records={list} areas={areaList} day={day} open={open} downloadDocument={downloadDocument} />}
+        {view === 'emergency' && <Emergency records={list} day={day} open={open} />}
         {view === 'areas' && <div className="screen inside">
           <div className="page-heading"><h1>{currentArea?.title || 'Areas'}</h1>
             {currentArea ? <button className="quiet" onClick={() => setArea(null)}>All areas</button> : <button className="quiet" onClick={() => open({ kind: 'area' })}>Add area</button>}
           </div>
           {currentArea ? <>
             <div className="section-actions"><button className="secondary" onClick={() => open({ kind: 'task', area })}>Add item</button><button className="quiet" onClick={() => open(currentArea)}>Edit area</button></div>
-            {currentArea.id === 'finance' && <Budget records={list} day={day} open={open} save={save} importRecords={importRecords} renderRow={renderRow} busy={busy} />}
+            {currentArea.id === 'finance' && <>
+              <div className="segmented record-tabs" aria-label="Finance view">{Object.entries({ budget: 'Budget', accounts: 'Accounts', travel: 'Travel', sars: 'SARS' }).map(([id, label]) =>
+                <button key={id} aria-pressed={financeView === id} onClick={() => setFinanceView(id)}>{label}</button>)}</div>
+              {financeView === 'budget' && <Budget records={list} day={day} open={open} save={save} importRecords={importRecords} renderRow={renderRow} busy={busy} />}
+              {financeView === 'accounts' && <BankAccounts records={list} open={open} />}
+              {financeView === 'travel' && <TravelLog records={list} day={day} open={open} />}
+              {financeView === 'sars' && <TaxLog records={list} day={day} open={open} downloadDocument={downloadDocument} />}
+            </>}
+            {area === 'family' && <Family records={list} open={open} />}
+            {area === 'house' && <HouseLists records={list} day={day} open={open} save={save} busy={busy} />}
+            {area === 'mornay' && <button className="quiet" onClick={() => navigate('emergency')}>Open emergency card</button>}
             {(area === 'mornay' || area === 'family' || list.some(item => item.kind === 'medication' && item.area === area)) && <Medication records={list} day={day} area={area} open={open} save={save} busy={busy} />}
             {area === 'goals' && <button className="secondary" onClick={() => navigate('goals')}>Goals and habits</button>}
             <section className="feature-section"><h2>Items in this area</h2><ul>{list.filter(item => item.area === area && !item.suggested && !item.dismissed &&
               ['task', 'event', 'note', 'journal', 'document', 'goal', 'habit'].includes(item.kind)).map(renderRow)}</ul></section>
           </> : <>
-            <ul>{areaList.map(item => <li className="row" key={item.id}><button className="row-detail" onClick={() => setArea(item.id)}><span>{item.title}<small>{areaStatus(item)}</small></span><ArrowRight size={18} /></button></li>)}</ul>
-            <section className="feature-section"><h2>Browse by type</h2><div className="section-actions"><button className="secondary" onClick={() => navigate('records')}>Notes, journal and files</button><button className="secondary" onClick={() => navigate('goals')}>Goals and habits</button><button className="secondary" onClick={() => navigate('review')}>Weekly review</button></div></section>
+            <ul>{areaList.map(item => <li className="row" key={item.id}><button className="row-detail" onClick={() => showArea(item.id)}><span>{item.title}<small>{areaStatus(item)}</small></span><ArrowRight size={18} /></button></li>)}</ul>
+            <section className="feature-section"><h2>Browse by type</h2><div className="section-actions"><button className="secondary" onClick={() => navigate('emergency')}>Emergency</button><button className="secondary" onClick={() => navigate('records')}>Notes, journal and files</button><button className="secondary" onClick={() => navigate('goals')}>Goals and habits</button><button className="secondary" onClick={() => navigate('review')}>Weekly review</button></div></section>
           </>}
         </div>}
         {view === 'goals' && <div className="screen inside"><h1>Goals and habits</h1>

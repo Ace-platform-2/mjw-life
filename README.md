@@ -31,3 +31,11 @@ Finance accepts manual bills, category budgets and spending. Optional spending C
 Medication scheduling and check-ins are user-entered. Calendar reminders are downloadable files. Users should verify notification behaviour in their calendar after importing and update it when their schedule changes.
 
 Audio transcription requires the server-only OPENAI_API_KEY environment variable. The app asks for permission before sending the selected audio. It accepts clips up to 3 MB. Users can also paste and review transcripts without a configured provider.
+
+## Inbox, home and finance
+
+Apply the home and finance migration before deploying. The Inbox **Refresh Gmail** action saves the Google mailbox history checkpoint together with new email subjects. It checks the previous seven days on the first run and uses Gmail history on later runs. A configured Google OAuth Web client ID and Gmail read access are required. Access tokens are held only while the Inbox is open. Existing follow-ups stay editable.
+
+Today opens the private Emergency card, and Areas opens Family, House and Finance. Bank account numbers are encrypted in the browser with an account vault passphrase and displayed as masked digits. The passphrase is required to reveal a number. Standard exports include the masked digits. Travel and receipt CSV exports are records for review. They are independent of the monthly budget and do not submit a tax return.
+
+Audio transcription uses the pinned multilingual Whisper Tiny model in a browser worker. It begins when a file is chosen or a recording stops. The browser downloads model files on first use. It processes the recording locally and saves the transcript only after review. Set ONNXRUNTIME_NODE_INSTALL_CUDA=skip when installing this project to skip the unused CUDA download.
