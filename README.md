@@ -75,3 +75,10 @@ Open **Today → Catch-up and action control**, or **Areas → FPG → Catch-up*
 The Today priority now ranks overdue and escalated tasks before routine items while honouring a manually chosen focus. The Property directory shows open, urgent, budget and overdue counts from saved work logs. An arrears total is explicitly a sum of known manually saved balances, with missing balances counted separately; this is not a live debtor ledger.
 
 Release gates and the 14-day acceptance criteria are maintained in [docs/RELEASE_GATES.md](docs/RELEASE_GATES.md). User acceptance on mobile, full backup/recovery, FPG organisation data governance, Outlook/MRI integration, notification delivery and long-audio transcription are not marked complete.
+
+
+## Data health and metadata export
+
+**Settings → Data health and recovery** shows the number of included records, linked attachments and excluded work-related records, plus the latest saved Gmail refresh checkpoint. It does not certify that Outlook, Calendar or MRI/MDA is in sync.
+
+The default export contains personal-area metadata only. Including FPG records requires explicitly selecting the work-data option and acknowledging the sensitivity of the export. Vault payloads for bank numbers are excluded. The JSON export is readable and unencrypted, so store it securely. Linked document/photo binaries and device-local audio must be downloaded separately. This is **not** a complete restore backup; complete backup/restore and two-user isolation remain P0 acceptance requirements.
