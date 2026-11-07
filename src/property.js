@@ -19,6 +19,10 @@ export const leasingStages = {
 export const vacancyStages = {
   upcoming: 'Upcoming vacancy', available: 'Available', under_offer: 'Under offer', let: 'Let',
 };
+export const budgetStages = {
+  draft: 'Draft', assumptions: 'Assumptions in progress', review: 'Under review',
+  approval: 'Awaiting approval', approved: 'Approved', submitted: 'Submitted',
+};
 
 export function propertyWorkMatches(item, building, tenantName, query) {
   const text = searchText([
@@ -143,7 +147,7 @@ export function readPropertyRecord(item, values, propertyType, buildings, tenant
       startsAt: day + 'T' + start + ':00+02:00', endsAt: day + 'T' + end + ':00+02:00' });
   }
   if (propertyType === 'leasing') record.stage = get('stage');
-  if (propertyType === 'arrears' || propertyType === 'vacancy') {
+  if (['arrears', 'vacancy', 'budget'].includes(propertyType)) {
     const note = get('followUpNote');
     if (note.length > 2000) throw new Error('Keep the follow-up note under 2,000 characters.');
     if (note) record.followUpNotes = [...(record.followUpNotes || []), { text: note, at: new Date().toISOString() }];
@@ -152,6 +156,18 @@ export function readPropertyRecord(item, values, propertyType, buildings, tenant
     const balance = get('amount');
     if (balance && !/^(?:\d{1,9}(?:\.\d{1,2})?|\.\d{1,2})$/.test(balance)) throw new Error('Enter the arrears balance in rand.');
     record.amount = balance ? Math.round(Number(balance) * 100) : null;
+  }
+  if (propertyType === 'budget') {
+    const stage = get('budgetStage') || item.budgetStage || 'draft';
+    if (!Object.hasOwn(budgetStages, stage)) throw new Error('Choose a valid budget stage.');
+    const submittedOn = get('submittedOn');
+    if (stage === 'submitted' && !submittedOn) throw new Error('Enter the date when the budget was submitted.');
+    if (submittedOn && !/^\d{4}-\d{2}-\d{2}$/.test(submittedOn)) throw new Error('Check the budget submission date.');
+    return Object.assign(record, {
+      budgetStage: stage, budgetPeriod: get('budgetPeriod').slice(0, 60),
+      budgetVersion: get('budgetVersion').slice(0, 60),
+      submittedOn, submissionRef: get('submissionRef').slice(0, 220),
+    });
   }
   if (propertyType === 'vacancy') {
     const area = get('floorArea');

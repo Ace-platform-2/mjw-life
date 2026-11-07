@@ -82,3 +82,10 @@ Release gates and the 14-day acceptance criteria are maintained in [docs/RELEASE
 **Settings → Data health and recovery** shows the number of included records, linked attachments and excluded work-related records, plus the latest saved Gmail refresh checkpoint. It does not certify that Outlook, Calendar or MRI/MDA is in sync.
 
 The default export contains personal-area metadata only. Including FPG records requires explicitly selecting the work-data option and acknowledging the sensitivity of the export. Vault payloads for bank numbers are excluded. The JSON export is readable and unencrypted, so store it securely. Linked document/photo binaries and device-local audio must be downloaded separately. This is **not** a complete restore backup; complete backup/restore and two-user isolation remain P0 acceptance requirements.
+
+
+## Property budget milestones (manual control)
+
+An FPG property **Budget** log now has a stage (Draft → Assumptions in progress → Under review → Awaiting approval → Approved → Submitted), period, revision, submission date and reference. All stages are manually confirmed. A submitted budget requires a submission date, and does not automatically close the action. Budget entries retain dated follow-up notes and are visible by building from **Properties → Budgets** or **Today → Catch-up → Budget control**.
+
+This is a milestone/control register, not a financial budget workbook or an MRI/MDA import. The actual leasing assumptions, rental amounts and sign-off documents still require authorised source data and human verification.

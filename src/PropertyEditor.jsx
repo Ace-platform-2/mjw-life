@@ -3,7 +3,7 @@ import { Dialog } from './Editor.jsx';
 import { downloadFile, eventCalendarFile } from './files.js';
 import { localTime } from './planning.js';
 import { getDocument } from './store.js';
-import { fpgNumberCategories, leasingStages, maxPropertyPhotos, preparePropertyPhoto, propertyStatuses, propertyTypes, readFpgNumber, readPropertyRecord, sitePhoneFields, vacancyStages } from './property.js';
+import { budgetStages, fpgNumberCategories, leasingStages, maxPropertyPhotos, preparePropertyPhoto, propertyStatuses, propertyTypes, readFpgNumber, readPropertyRecord, sitePhoneFields, vacancyStages } from './property.js';
 
 function PhotoViewer({ photos }) {
   const [selected, setSelected] = useState(null);
@@ -103,7 +103,7 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
   const meeting = logForm && propertyType === 'meeting';
   const locked = busy || processing;
   const register = ['arrears', 'vacancy', 'budget'].includes(propertyType);
-  const trackNotes = ['arrears', 'vacancy'].includes(propertyType);
+  const trackNotes = ['arrears', 'vacancy', 'budget'].includes(propertyType);
   const buildings = records.filter(row => row.kind === 'fpg_building').sort((a, b) => a.title.localeCompare(b.title));
   const tenants = records.filter(row => row.kind === 'fpg_tenant' && row.buildingId === buildingId).sort((a, b) => a.title.localeCompare(b.title));
   const historicalTenant = logForm && item.tenantId && item.buildingId === buildingId && !tenants.some(row => row.id === item.tenantId);
@@ -180,6 +180,18 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
           </div>}
           <Input name="location" label={meeting ? 'Venue or link' : 'Unit or location'} item={item} />
           {propertyType === 'leasing' && <Choice name="stage" label="Leasing stage" value={item.stage || 'enquiry'} choices={leasingStages} />}
+          {propertyType === 'budget' && <>
+            <Choice name="budgetStage" label="Budget stage" value={item.budgetStage || 'draft'} choices={budgetStages} />
+            <div className="two-fields">
+              <Input name="budgetPeriod" label="Budget period" item={item} placeholder="e.g. FY2027/28" maxLength="60" />
+              <Input name="budgetVersion" label="Version / revision" item={item} placeholder="e.g. v1" maxLength="60" />
+            </div>
+            <div className="two-fields">
+              <Input name="submittedOn" label="Submitted on" item={item} type="date" />
+              <Input name="submissionRef" label="Submission reference" item={item} placeholder="Email or signed approval" />
+            </div>
+            <small>Record the actual stage and supporting reference. Marking a budget submitted requires a submission date; it does not automatically close the item.</small>
+          </>}
           {propertyType === 'arrears' && <Input name="amount" label="Arrears balance (R, optional)" type="number" min="0" max="999999999.99" step=".01"
             item={{ amount: item.amount == null ? '' : item.amount / 100 }} />}
           {propertyType === 'vacancy' && <>

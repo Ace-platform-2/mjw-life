@@ -5,7 +5,7 @@ import { downloadFile } from './files.js';
 import { buildingSnapshot, controlSummary } from './action-control.js';
 import { money, prettyDate } from './model.js';
 import { localTime } from './planning.js';
-import { buildingMatches, fpgNumberCategories, fpgNumberMatches, isPropertyEntry, leasingStages, matchingPropertyPhone, propertyAttention, propertyPhone, propertyStatuses, propertyTypes, propertyWorkMatches, sitePhoneFields, tenantMatches, vacancyStages } from './property.js';
+import { budgetStages, buildingMatches, fpgNumberCategories, fpgNumberMatches, isPropertyEntry, leasingStages, matchingPropertyPhone, propertyAttention, propertyPhone, propertyStatuses, propertyTypes, propertyWorkMatches, sitePhoneFields, tenantMatches, vacancyStages } from './property.js';
 
 function CallLink({ value, label }) {
   const href = propertyPhone(value);
@@ -111,6 +111,10 @@ function WorkRows({ entries, buildings, tenantNames, day, open, scoped }) {
           item.location, item.day && (item.propertyType === 'arrears' ? 'As at ' : '') + prettyDate(item.day),
           item.startsAt ? localTime(item.startsAt) : item.time, propertyStatuses[item.status],
           vacancyStages[item.vacancyStage], item.availableFrom && 'Available ' + prettyDate(item.availableFrom),
+          item.propertyType === 'budget' && budgetStages[item.budgetStage],
+          item.propertyType === 'budget' && item.budgetPeriod,
+          item.propertyType === 'budget' && item.budgetVersion && 'Version ' + item.budgetVersion,
+          item.propertyType === 'budget' && item.submittedOn && 'Submitted ' + prettyDate(item.submittedOn),
         ].filter(Boolean).join(' · ')}</small>
         {(item.due || item.owner || item.nextAction) && <small>{[
           item.owner, item.due && 'Follow-up ' + prettyDate(item.due), item.nextAction,
