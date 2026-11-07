@@ -51,3 +51,7 @@ Use the work log for incidents, tenant concerns, maintenance, site reports, leas
 Open **Arrears**, **Vacancies** or **Budgets** in the property directory to see the portfolio or one building. Arrears and vacancy records keep dated follow-up notes. Use **Needs attention** to see due or escalated work. Property budget items track submissions and follow-ups.
 
 Apply the FPG property migrations before deploying. Keep tenant records, documents and phonebook entries in the enrolled user's workspace and out of source and demo data.
+
+## Brand identity
+
+**Primary MJW Life wordmark:** metallic teal/blue ribbon followed by the approved “MJW Life” name. Used in the platform header, sign-in screen and branded outputs. **Standalone ribbon:** official symbol for app installation, splash/loading, favicon and Today navigation. Source artwork is preserved. See `public/brand/BRAND_USAGE.md` for asset replacement and trademark guidelines. The app's current binary assets must be replaced with the approved uploaded artwork if they still contain earlier variants; the documented brand implementation is not a trademark registration.

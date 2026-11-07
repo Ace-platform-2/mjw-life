@@ -91,12 +91,17 @@ export function App() {
   </main></div>;
 }
 
+/** Official MJW Life marks. The ribbon is the platform's recognisable symbol. */
 function Brand() {
-  return <img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="760" height="253" />;
+  return <img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="760" height="253" decoding="async" />;
+}
+
+function RibbonMark({ className = '' }) {
+  return <img className={['ribbon-mark', className].filter(Boolean).join(' ')} src="/brand/mjw-ribbon.png" alt="" aria-hidden="true" width="192" height="192" decoding="async" />;
 }
 
 function Splash() {
-  return <div className="boot-screen" role="status"><img src="/brand/mjw-ribbon.png" alt="MJW Life" width="124" height="124" /><span className="sr-only">Opening your workspace</span></div>;
+  return <div className="boot-screen" role="status"><RibbonMark className="splash-ribbon" /><span className="sr-only">Opening MJW Life</span></div>;
 }
 
 function Workspace({ session }) {
@@ -501,7 +506,7 @@ function Workspace({ session }) {
         </div>}
       </>}
     </main>
-    <nav className="nav" aria-label="Main navigation">{tabs.map(([id, label, Icon]) => <button key={id} aria-current={navView === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={24} weight="bold" />{label}</button>)}</nav>
+    <nav className="nav" aria-label="Main navigation">{tabs.map(([id, label, Icon]) => <button key={id} aria-current={navView === id ? 'page' : undefined} onClick={() => navigate(id)}>{id === 'today' ? <RibbonMark className="nav-ribbon" /> : <Icon size={24} weight="bold" />}{label}</button>)}</nav>
     {editDialog}
     {focus && <Dialog title="Today’s priority" close={() => { setFocus(null); setError(''); }} busy={busy}>
       <h3>{focus.title}</h3><p className="muted">{focus.minutes ? time(focus.minutes) + ' planned' : 'Ready when you are.'}</p>

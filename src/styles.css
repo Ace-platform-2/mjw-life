@@ -231,3 +231,13 @@ summary{cursor:pointer;font-weight:700;color:var(--teal);min-height:34px}
 .account-number{font-variant-numeric:tabular-nums;letter-spacing:.06em;color:var(--teal);overflow-wrap:anywhere}
 .gmail-refresh{border:1px solid #28465a;background:#132234;border-radius:10px;padding:10px;margin:0 0 13px}
 .gmail-refresh small{display:block;margin-top:5px}
+
+/* MJW Life brand identity: always-visible wordmark plus the ribbon as app/home symbol. */
+.brand-button{display:inline-flex;align-items:center;min-height:48px;flex-shrink:1}
+.brand-button:focus-visible{outline:2px solid #07ece3;outline-offset:5px;border-radius:6px}
+.brand{object-fit:contain;filter:drop-shadow(0 0 6px rgba(0,213,213,.12))}
+.ribbon-mark{display:block;object-fit:contain;flex-shrink:0}
+.nav .nav-ribbon{width:30px;height:30px;margin:-3px 0;filter:drop-shadow(0 0 3px rgba(0,225,217,.20))}
+.nav button[aria-current=page] .nav-ribbon{filter:drop-shadow(0 0 6px rgba(0,225,217,.40))}
+.boot-screen .splash-ribbon{width:clamp(118px,34vw,172px);height:auto;aspect-ratio:1;filter:drop-shadow(0 0 24px rgba(0,207,228,.23))}
+@media(max-width:375px){.brand{width:clamp(108px,32vw,150px)}}
