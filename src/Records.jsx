@@ -4,6 +4,7 @@ import { isEvent } from './planning.js';
 import { downloadFile } from './files.js';
 import { GoogleSources } from './GoogleSources.jsx';
 import { Transcription } from './Transcription.jsx';
+import { archiveReport, createMetadataArchive, sourceFreshness } from './data-audit.js';
 
 export const inInbox = item => item.kind === 'task' && !isEvent(item) && !item.completed && item.status !== 'done' &&
   !item.dismissed && (item.suggested || (!item.planned && item.status === 'open'));
@@ -70,6 +71,15 @@ export function Records({ records, areas, day, open, downloadDocument, userId = 
 export function Settings({ areas, records, importRecords, signOut }) {
   const [area, setArea] = useState('');
   const [selected, setSelected] = useState(false);
+  const [includeWork, setIncludeWork] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const inventory = archiveReport(records, { includeWork });
+  const freshness = sourceFreshness(records, dateKey());
+  const exportArchive = () => {
+    if (!confirmArchive) return;
+    const archive = createMetadataArchive(records, new Date().toISOString(), { includeWork });
+    downloadFile(JSON.stringify(archive, null, 2), 'mjw-life-metadata-' + dateKey() + '.json', 'application/json');
+  };
   const exportRecords = () => {
     const itemIds = new Set(records.filter(item => item.area === area || item.id === area).map(item => item.id));
     const entries = records.filter(item => itemIds.has(item.id) || (item.kind === 'checkin' && itemIds.has(item.habit)))
@@ -89,6 +99,27 @@ export function Settings({ areas, records, importRecords, signOut }) {
       <label>Area<select value={area} onChange={event => { setArea(event.target.value); setSelected(false); }}><option value="">Select area</option>{areas.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
       {area && <label className="tick"><input type="checkbox" checked={selected} onChange={event => setSelected(event.target.checked)} /> Include private details from this area in the export.</label>}
       <button className="secondary" disabled={!area || !selected} onClick={exportRecords}>Download area data</button>
+    </section>
+    <section className="feature-section">
+      <h2>Data health and recovery</h2>
+      <p className="muted">This reflects records currently loaded in MJW Life, not an independent backup or a live external-source audit.</p>
+      <dl className="stat-grid">
+        <div><dt>Records in export</dt><dd>{inventory.included}</dd></div>
+        <div><dt>External attachments</dt><dd>{inventory.attachmentCount}</dd></div>
+        <div><dt>Work items excluded</dt><dd>{inventory.workExcluded}</dd></div>
+      </dl>
+      <p><strong>Gmail checkpoint:</strong> {freshness.checkedAt
+        ? new Intl.DateTimeFormat('en-ZA', { timeZone:'Africa/Johannesburg', dateStyle:'medium', timeStyle:'short' }).format(new Date(freshness.checkedAt)) + (freshness.status === 'stale' ? ' · Check for new messages' : '')
+        : 'Not yet saved in this workspace'}</p>
+      <p className="muted">Calendar and Outlook imports are not guaranteed to be current. Open Connected accounts or Inbox to review them manually.</p>
+      <h3>Export record metadata</h3>
+      <p className="muted">Exports are readable, unencrypted JSON files. They contain notes and contact details. Uploaded attachments and locally saved audio are not included. This is not a complete restore backup.</p>
+      <label className="tick"><input type="checkbox" checked={includeWork} onChange={event => { setIncludeWork(event.target.checked); setConfirmArchive(false); }} />
+        Include FPG work records (only where authorised to export them)</label>
+      <label className="tick"><input type="checkbox" checked={confirmArchive} onChange={event => setConfirmArchive(event.target.checked)} />
+        I understand this file may contain private information and must be stored securely.</label>
+      <button className="secondary" disabled={!confirmArchive} onClick={exportArchive}>Download metadata archive (.json)</button>
+      <small>Download documents and photos separately from their records, and audio files from Audio on each device.</small>
     </section>
     {signOut && <section className="feature-section"><h2>Account</h2><button className="secondary" onClick={signOut}>Sign out</button></section>}
   </div>;

@@ -63,3 +63,8 @@ Date: 2026-11-07
 - Do not imply that a programmatic file download is guaranteed on mobile.
 - Do not imply Wispr Flow's read-only connector is a live transcription SDK.
 - The existing platform's user-scoped data is not a shared-team model.
+
+
+## Partial Stage 2 improvement
+
+Settings now provides a local metadata archive inventory and saved Gmail checkpoint status. The archive explicitly excludes file binaries, device-local audio and encrypted bank vault data, so it is not a restorable backup. Work records are excluded by default. Full backup/restore, cross-user RLS tests and organisation data segregation remain BLOCKED and tracked separately.
