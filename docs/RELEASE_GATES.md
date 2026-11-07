@@ -73,3 +73,7 @@ Settings now provides a local metadata archive inventory and saved Gmail checkpo
 ## Partial Stage 3 improvement
 
 Budget entries now support an explicitly chosen stage, period, revision and a dated submission reference, with a test proving that submission does not automatically close the case. This is not a substitute for financial forecast sheets, lease assumptions or approval workflows; data validation against MRI/MDA is still pending.
+
+## Stage 4 operational activation
+
+The Catch-up empty state now directs the user to create the first verified budget, arrears or vacancy record. These are manual entry points, not source synchronisation or sample FPG data. Real-world results still depend on authorised data population and device acceptance.
