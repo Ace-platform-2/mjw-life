@@ -11,8 +11,8 @@ ul{padding:0;list-style:none}
 small{font-size:.8rem;color:var(--muted);line-height:1.45}
 .shell{max-width:1150px;margin:auto;padding-bottom:calc(86px + env(safe-area-inset-bottom))}
 .header{padding:25px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.brand{font-size:2rem;line-height:1;font-weight:900;letter-spacing:-.07em}
-.brand span,.add,.small-link{color:var(--teal)}
+.brand{display:block;width:clamp(140px,42vw,235px);height:auto}
+.add,.small-link{color:var(--teal)}
 .subtitle{color:var(--muted);font-size:1rem;margin-top:4px}
 .header-actions,.section-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .demo{font-size:.72rem;color:var(--muted)}

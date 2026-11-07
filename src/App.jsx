@@ -82,7 +82,7 @@ export function App() {
 }
 
 function Brand() {
-  return <div><div className="brand">MJW <span>LIFE</span></div><div className="subtitle">Command Deck</div></div>;
+  return <div><img className="brand" src="/brand/mjw-life.webp" alt="MJW Life" width="760" height="253" /><div className="subtitle">Command Deck</div></div>;
 }
 
 function Workspace({ session }) {
