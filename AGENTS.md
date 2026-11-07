@@ -11,3 +11,5 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 Keep the navy launch screen and ribbon app icon. Keep Emergency and quick capture within one tap of Today. Finance records are manual.
 
 Keep FPG Properties reachable from Today and the FPG area. Tenant contacts, arrears and site photos belong in the signed-in workspace only. Keep real work records out of committed source, fixtures and public assets.
+
+Keep tenant files editable and omit import labels and missing-number messages. Keep building documents and the FPG phonebook private. Tenant PDF exports include the complete selected building or portfolio. Deleting a tenant keeps linked property work.

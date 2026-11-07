@@ -175,6 +175,17 @@ summary{cursor:pointer;font-weight:700;color:var(--teal);min-height:34px}
 .property-capture .property-incident{border-color:#674249;background:#2d2023}
 .property-capture .property-incident svg{color:#ffc6aa}
 .property-tabs button{flex:1}
+.property-directory-actions{margin-top:12px}
+.property-file-download{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.property-file-download svg{flex-shrink:0}
+.property-file-group{margin-top:16px}
+.property-file-group .row-detail{justify-content:flex-start}
+.property-number-row{padding:3px 0 10px;border-bottom:1px solid var(--line)}
+.property-number-row .row-detail{width:100%}
+.property-number-links{display:flex;gap:6px;flex-wrap:wrap}
+.property-number-links .property-call{max-width:100%;min-width:0}
+.property-delete{margin-top:16px;padding-top:10px;border-top:1px solid var(--line)}
+.property-delete .delete{color:#ffb2a7}
 .property-search{margin:14px 0}
 .property-search input{min-height:48px}
 .property-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:8px;margin:12px 0}

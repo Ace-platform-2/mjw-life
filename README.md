@@ -44,6 +44,10 @@ Audio transcription uses the pinned multilingual Whisper Tiny model in a browser
 
 Open **Today → FPG Properties**, **Areas → FPG → Properties** or **Emergency → FPG property contacts**. Search tenant names, shop numbers, contacts and phone numbers across the portfolio, or open a building to see its tenant files and site numbers. Tap a number to call. Add control room, facilities and site office numbers under **Edit property**.
 
+Select **Documents** on a building to add floorplans and other files. You can choose several files at once, up to 10 MB each. Edit a file to change its title, category or notes, or replace it.
+
+The directory exports the full building or portfolio tenant list as a landscape A4 PDF. **Edit tenant** supports changing the property and deleting a tenant file. Linked work history stays in the work log. **Important FPG numbers** is available from Emergency, the FPG area and the property directory.
+
 Use the work log for incidents, tenant concerns, maintenance, site reports, leasing, meetings, arrears and vacancies. Entries can link to a tenant and carry an owner, follow-up date and escalation flag. Meetings and dated follow-ups appear in Calendar. Photos are resized on the device and saved in the private documents bucket.
 
-Apply the FPG Properties migration before deploying this feature. Tenant imports go into the enrolled user's workspace in Supabase. Keep real records out of source and demo data.
+Apply the FPG property migrations before deploying. Keep tenant records, documents and phonebook entries in the enrolled user's workspace and out of source and demo data.

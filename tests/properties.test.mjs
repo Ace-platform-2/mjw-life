@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildingMatches, isPropertyEntry, matchingPropertyPhone, propertyAttention, propertyPhone, readPropertyRecord, tenantMatches } from '../src/property.js';
+import { buildingMatches, fpgNumberMatches, isPropertyEntry, matchingPropertyPhone, propertyAttention, propertyPhone, readFpgNumber, readPropertyRecord, tenantMatches } from '../src/property.js';
 
 const building = { id: 'test-building', title: 'Example Centre', code: 'EX', securityPhone: '021 000 0000' };
 const tenant = { id: 'test-tenant', buildingId: building.id, title: 'Example Café', units: ['A-12'],
@@ -54,4 +54,25 @@ test('property attention includes due follow-ups and escalations and excludes cl
     { ...log, id: 'later', due: '2026-11-08' },
   ];
   assert.deepEqual(propertyAttention(items, '2026-11-07').map(item => item.id), ['escalated', 'due']);
+});
+
+test('work history retains its tenant name and remains editable after the tenant file is removed', () => {
+  const incident = readPropertyRecord({ kind: 'fpg_log', id: 'incident' }, fields(), 'incident', [building], [tenant]);
+  const edited = readPropertyRecord(incident, fields({ status: 'closed' }), 'incident', [building], []);
+  assert.equal(edited.tenantId, tenant.id);
+  assert.equal(edited.tenantName, tenant.title);
+  assert.equal(edited.status, 'closed');
+  assert.equal(readPropertyRecord(edited, fields({ tenantId: '' }), 'incident', [building], []).tenantName, '');
+});
+
+test('FPG numbers can be left blank and searched by category or either phone number', () => {
+  const item = { id: 'contact', kind: 'fpg_contact' };
+  const values = new URLSearchParams({ title: 'Example Security', category: 'security', alternatePhone: '+27 (0)82 000 0000' });
+  const contact = readFpgNumber(item, values);
+  assert.equal(contact.phone, '');
+  assert.equal(fpgNumberMatches(contact, 'Security'), true);
+  assert.equal(fpgNumberMatches(contact, '0820000000'), true);
+  assert.equal(fpgNumberMatches(contact, 'Facilities'), false);
+  values.set('phone', 'wrong number');
+  assert.throws(() => readFpgNumber(item, values), /phone numbers/);
 });

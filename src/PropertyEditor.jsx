@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog } from './Editor.jsx';
 import { downloadFile, eventCalendarFile } from './files.js';
-import { prettyDate } from './model.js';
 import { localTime } from './planning.js';
 import { getDocument } from './store.js';
-import { leasingStages, maxPropertyPhotos, preparePropertyPhoto, propertyStatuses, propertyTypes, readPropertyRecord, sitePhoneFields } from './property.js';
+import { fpgNumberCategories, leasingStages, maxPropertyPhotos, preparePropertyPhoto, propertyStatuses, propertyTypes, readFpgNumber, readPropertyRecord, sitePhoneFields } from './property.js';
 
 function PhotoViewer({ photos }) {
   const [selected, setSelected] = useState(null);
@@ -44,6 +43,52 @@ function Choice({ name, label, value, choices }) {
     <option value={id} key={id}>{text}</option>)}</select></label>;
 }
 
+export function DeletePropertyRecord({ item, label, save, close, busy }) {
+  const [confirming, setConfirming] = useState(false);
+  return <div className="property-delete">
+    {confirming ? <>
+      <p>Delete {item.title} permanently?</p>
+      <div className="section-actions">
+        <button type="button" className="secondary" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
+        <button type="button" className="quiet delete" disabled={busy} onClick={async () => {
+          if (await save(item, true)) close();
+        }}>Confirm delete</button>
+      </div>
+    </> : <button type="button" className="quiet delete" disabled={busy} onClick={() => setConfirming(true)}>Delete {label}</button>}
+  </div>;
+}
+
+export function FpgNumberEditor({ item, close, save, busy, error }) {
+  const [id] = useState(() => item.id || crypto.randomUUID());
+  const [validation, setValidation] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    if (busy) return;
+    setValidation('');
+    try {
+      if (await save(readFpgNumber({ ...item, id }, new FormData(event.currentTarget)))) close();
+    } catch (failure) {
+      setValidation(failure.message);
+    }
+  }
+
+  return <Dialog title={item.id ? 'Edit FPG number' : 'Add FPG number'} close={close} busy={busy}>
+    <form className="property-form" onSubmit={submit}>
+      <fieldset disabled={busy}>
+        <Input name="title" label="Name or company" item={item} maxLength="180" required />
+        <Choice name="category" label="Category" value={item.category || 'other'} choices={fpgNumberCategories} />
+        <Input name="phone" label="Phone number" type="tel" item={item} />
+        <Input name="alternatePhone" label="Alternate number" type="tel" item={item} />
+        <label>Notes<textarea name="detail" defaultValue={item.detail} rows="3" maxLength="10000" /></label>
+      </fieldset>
+      {(validation || error) && <p role="alert">{validation || error}</p>}
+      <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+    </form>
+    {item.id && <DeletePropertyRecord item={item} label="number" save={save} close={close} busy={busy} />}
+  </Dialog>;
+}
+
 export function PropertyEditor({ item, records, day, open, close, save, saveDocument, busy, error }) {
   const [id] = useState(() => item.id || crypto.randomUUID());
   const [buildingId, setBuildingId] = useState(item.buildingId || '');
@@ -59,6 +104,7 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
   const locked = busy || processing;
   const buildings = records.filter(row => row.kind === 'fpg_building').sort((a, b) => a.title.localeCompare(b.title));
   const tenants = records.filter(row => row.kind === 'fpg_tenant' && row.buildingId === buildingId).sort((a, b) => a.title.localeCompare(b.title));
+  const historicalTenant = logForm && item.tenantId && item.buildingId === buildingId && !tenants.some(row => row.id === item.tenantId);
   const savedPhotos = item.photos || [];
   const title = buildingForm ? (item.id ? 'Edit property' : 'Add property') : tenantForm ? (item.id ? 'Edit tenant' : 'Add tenant') : item.id ? propertyTypes[propertyType] : 'Log property work';
 
@@ -99,11 +145,10 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
           {Object.entries(propertyTypes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
         </select></label>}
         <Input name="title" label={buildingForm ? 'Property name' : tenantForm ? 'Tenant name' : 'Title'} item={item} maxLength="180" required />
-        {!buildingForm && (tenantForm && item.id ? <input type="hidden" name="buildingId" value={buildingId} />
-          : <label>Property<select name="buildingId" value={buildingId} required onChange={event => { setBuildingId(event.target.value); setTenantId(''); }}>
+        {!buildingForm && <label>Property<select name="buildingId" value={buildingId} required onChange={event => { setBuildingId(event.target.value); setTenantId(''); }}>
             <option value="">Choose a property</option>
             {buildings.map(row => <option key={row.id} value={row.id}>{row.title}</option>)}
-          </select></label>)}
+          </select></label>}
         {buildingForm && <>
           <div className="two-fields"><Input name="code" label="Short code" item={item} maxLength="20" /><Input name="erf" label="Erf or reference" item={item} /></div>
           <Input name="address" label="Street address" item={item} />
@@ -113,11 +158,11 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
         {tenantForm && <>
           {Object.entries({ units: 'Units or shops', contacts: 'Contact people', phones: 'Phone numbers', emails: 'Email addresses', aliases: 'Other trading names' })
             .map(([name, label]) => <label key={name}>{label}<textarea name={name} rows="2" maxLength="6000" defaultValue={(item[name] || []).join('\n')} placeholder="One per line" /></label>)}
-          {item.sourceDay && <small>Imported {prettyDate(item.sourceDay)} · contact list page {item.sourcePage}</small>}
         </>}
         {logForm && <>
           <label>Tenant (optional)<select name="tenantId" value={tenantId} onChange={event => setTenantId(event.target.value)}>
             <option value="">Site-wide or no tenant</option>
+            {historicalTenant && <option value={item.tenantId}>{item.tenantName || 'Former tenant'}</option>}
             {tenants.map(row => <option value={row.id} key={row.id}>{row.title}{row.units?.length ? ' · ' + row.units.join(', ') : ''}</option>)}
           </select></label>
           {meeting ? <>
@@ -174,6 +219,7 @@ export function PropertyEditor({ item, records, day, open, close, save, saveDocu
       </li>)}</ul>
       <button type="button" className="secondary" disabled={locked} onClick={() => open({ kind: 'fpg_log', buildingId, tenantId: item.id, propertyType: 'concern' })}>Log for this tenant</button>
     </div>}
+    {tenantForm && item.id && <DeletePropertyRecord item={item} label="tenant" save={save} close={close} busy={locked} />}
     {meeting && item.id && <button type="button" className="quiet" onClick={() => downloadFile(eventCalendarFile(item), 'mjw-property-meeting.ics', 'text/calendar')}>Download calendar reminder</button>}
   </Dialog>;
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Buildings, CalendarBlank, CalendarDots, Check, GearSix, Microphone, Plus, Receipt, ShieldPlus, ShoppingCart, SquaresFour, Tray } from '@phosphor-icons/react';
+import { ArrowRight, Buildings, CalendarBlank, CalendarDots, Check, GearSix, Microphone, Phone, Plus, Receipt, ShieldPlus, ShoppingCart, SquaresFour, Tray } from '@phosphor-icons/react';
 import { areas, dailyPlan, dateKey, money, prettyDate, riskSignals, shiftDay, weekStart } from './model.js';
 import { availability, eventOn, eventTypes, isEvent, localTime } from './planning.js';
 import { demo, getDocument, getGmailCheckpoint, insertRecords, loadRecords, removeDocument, saveGmailRefresh, storeDocument, supabase, writeRecord, writeRecords } from './store.js';
@@ -13,7 +13,8 @@ import { Budget } from './Budget.jsx';
 import { Medication } from './Medication.jsx';
 import { downloadFile } from './files.js';
 import { Properties } from './Properties.jsx';
-import { PropertyEditor } from './PropertyEditor.jsx';
+import { FpgNumberEditor, PropertyEditor } from './PropertyEditor.jsx';
+import { BuildingDocumentEditor } from './BuildingDocuments.jsx';
 import { isPropertyRecord, propertyAttention } from './property.js';
 
 const tabs = [
@@ -158,6 +159,7 @@ function Workspace({ session }) {
       }
       if (remove && ['document', 'tax_receipt'].includes(record.kind) && record.path) await removeDocument(record.path);
       setRecords(await writeRecord(userId, records, record, remove));
+      if (remove && record.kind === 'fpg_document' && record.path) await removeDocument(record.path).catch(() => null);
       setGuidance('');
       return true;
     } catch (failure) {
@@ -169,32 +171,50 @@ function Workspace({ session }) {
     }
   }
 
-  async function saveDocument(record, file) {
+  function saveDocument(record, file) {
+    return saveAttachments([{ record, file }]);
+  }
+
+  async function saveAttachments(entries) {
     if (lock.current || !records) return false;
     lock.current = true;
     setBusy(true);
     setError('');
-    const photos = Array.isArray(file);
     const uploads = [];
+    const replacedPaths = entries.filter(({ record }) => record.kind === 'fpg_document' && record.path).map(({ record }) => record.path);
     let writing = false;
     try {
-      const parent = records.find(item => item.id === record.relatedId);
-      if (parent && parent.area !== record.area) throw new Error('Choose the same area as the related record.');
-      for (const attachment of photos ? file : [file]) uploads.push(await storeDocument(userId, attachment));
-      const updated = photos ? { ...record, photos: [...(record.photos || []), ...uploads] } : { ...record, ...uploads[0] };
+      const updated = [];
+      for (const { record, file } of entries) {
+        const parent = records.find(item => item.id === record.relatedId);
+        if (parent && parent.area !== record.area) throw new Error('Choose the same area as the related record.');
+        const photos = Array.isArray(file);
+        const files = [];
+        for (const attachment of photos ? file : [file]) {
+          const upload = await storeDocument(userId, attachment);
+          uploads.push({ id: record.id, path: upload.path });
+          files.push(upload);
+        }
+        updated.push(photos ? { ...record, photos: [...(record.photos || []), ...files] } : { ...record, ...files[0] });
+      }
       writing = true;
-      setRecords(await writeRecord(userId, records, updated));
+      const next = updated.length === 1 ? await writeRecord(userId, records, updated[0])
+        : await writeRecords(userId, records, updated, { insertOnly: true });
+      setRecords(next);
+      await Promise.allSettled(replacedPaths.map(path => removeDocument(path)));
       return true;
     } catch (failure) {
       if (uploads.length) {
         const current = writing ? await loadRecords(userId).catch(() => null) : records;
-        const saved = current?.find(item => item.id === record.id);
-        if (saved && uploads.every(upload => saved.path === upload.path || saved.photos?.some(photo => photo.path === upload.path))) {
+        const saved = new Map(current?.map(item => [item.id, item]));
+        const attached = ({ id, path }) => saved.get(id)?.path === path || saved.get(id)?.photos?.some(photo => photo.path === path);
+        if (current && uploads.every(attached)) {
           setRecords(current);
+          await Promise.allSettled(replacedPaths.map(path => removeDocument(path)));
           return true;
         }
         if (current) await Promise.allSettled(uploads
-          .filter(upload => saved?.path !== upload.path && !saved?.photos?.some(photo => photo.path === upload.path))
+          .filter(upload => !attached(upload))
           .map(upload => removeDocument(upload.path)));
       }
       setError(failure instanceof Error ? failure.message : 'The document could not be saved.');
@@ -344,8 +364,26 @@ function Workspace({ session }) {
     return nextDate ? 'Next event ' + prettyDate(nextDate) : item.detail;
   }
 
-  const navView = ['records', 'audio', 'goals', 'review', 'emergency', 'properties'].includes(view) ? 'areas' : view;
+  const propertyView = view === 'properties' || view === 'fpg_numbers';
+  const navView = propertyView || ['records', 'audio', 'goals', 'review', 'emergency'].includes(view) ? 'areas' : view;
   if (!records && !error) return <Splash />;
+  let editDialog;
+  if (editor) {
+    const editorProps = { item: editor, close: closeEditor, save, busy, error };
+    const key = editor.id || [editor.kind, editor.buildingId, editor.tenantId, editor.propertyType].join(':');
+    if (editor.kind === 'fpg_document') {
+      editDialog = <BuildingDocumentEditor key={key} {...editorProps} building={list.find(item => item.id === editor.buildingId && item.kind === 'fpg_building')}
+        day={day} saveAttachments={saveAttachments} />;
+    } else if (editor.kind === 'fpg_contact') {
+      editDialog = <FpgNumberEditor key={key} {...editorProps} />;
+    } else if (isPropertyRecord(editor)) {
+      editDialog = <PropertyEditor key={key} {...editorProps} records={list} day={day} open={open} saveDocument={saveDocument} />;
+    } else {
+      editDialog = <Editor key={[editor.id, editor.kind, editor.relatedId].join(':')} {...editorProps} day={day} areas={areaList}
+        saveDocument={saveDocument} downloadDocument={downloadDocument}
+        related={editor.id ? list.filter(item => item.area === editor.area && (item.relatedId === editor.id || item.id === editor.relatedId)) : []} open={open} />;
+    }
+  }
   return <div className="shell">
     <header className="header"><button className="brand-button" aria-label="MJW Life home" onClick={() => navigate('today')}><Brand /></button><div className="header-actions">
       {demo && <span className="demo">Sample data</span>}
@@ -413,16 +451,20 @@ function Workspace({ session }) {
           if (error) setError('Sign-out failed. Try again.');
         }} />}
         {(view === 'records' || view === 'audio') && <Records key={view} initialKind={view === 'audio' ? 'audio' : 'note'} records={list} areas={areaList} day={day} open={open} downloadDocument={downloadDocument} />}
-        {view === 'emergency' && <Emergency records={list} day={day} open={open} openProperties={() => navigate('properties')} />}
-        {view === 'properties' && <Properties records={list} day={day} open={open} back={() => showArea('fpg')} />}
+        {view === 'emergency' && <Emergency records={list} day={day} open={open} openProperties={() => navigate('properties')}
+          openFpgNumbers={() => navigate('fpg_numbers')} />}
+        {propertyView && <Properties key={view} records={list} day={day} open={open} back={() => showArea('fpg')}
+          initialTab={view === 'fpg_numbers' ? 'numbers' : 'directory'} downloadDocument={downloadDocument} />}
         {view === 'areas' && <div className="screen inside">
           <div className="page-heading"><h1>{currentArea?.title || 'Areas'}</h1>
             {currentArea ? <button className="quiet" onClick={() => setArea(null)}>All areas</button> : <button className="quiet" onClick={() => open({ kind: 'area' })}>Add area</button>}
           </div>
           {currentArea ? <>
-            {area === 'fpg' && <button className="summary-row property-home-link" onClick={() => navigate('properties')}>
+            {area === 'fpg' && <><button className="summary-row property-home-link" onClick={() => navigate('properties')}>
               <Buildings size={22} /><span><strong>Properties</strong><small>Tenant contacts and property work</small></span><ArrowRight size={18} />
-            </button>}
+            </button><button className="summary-row property-home-link" onClick={() => navigate('fpg_numbers')}>
+              <Phone size={22} /><span><strong>Important FPG numbers</strong><small>Colleagues, security and service providers</small></span><ArrowRight size={18} />
+            </button></>}
             <div className="section-actions"><button className="secondary" onClick={() => open({ kind: 'task', area })}>Add item</button><button className="quiet" onClick={() => open(currentArea)}>Edit area</button></div>
             {currentArea.id === 'finance' && <>
               <div className="segmented record-tabs" aria-label="Finance view">{Object.entries({ budget: 'Budget', accounts: 'Accounts', travel: 'Travel', sars: 'SARS' }).map(([id, label]) =>
@@ -457,12 +499,7 @@ function Workspace({ session }) {
       </>}
     </main>
     <nav className="nav" aria-label="Main navigation">{tabs.map(([id, label, Icon]) => <button key={id} aria-current={navView === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={24} weight="bold" />{label}</button>)}</nav>
-    {editor && (isPropertyRecord(editor)
-      ? <PropertyEditor key={editor.id || [editor.kind, editor.buildingId, editor.tenantId, editor.propertyType].join(':')} item={editor}
-        records={list} day={day} open={open} close={closeEditor} save={save} saveDocument={saveDocument} busy={busy} error={error} />
-      : <Editor key={[editor.id, editor.kind, editor.relatedId].join(':')} item={editor} day={day} areas={areaList} busy={busy}
-        error={error} close={closeEditor} save={save} saveDocument={saveDocument} downloadDocument={downloadDocument}
-        related={editor.id ? list.filter(item => item.area === editor.area && (item.relatedId === editor.id || item.id === editor.relatedId)) : []} open={open} />)}
+    {editDialog}
     {focus && <Dialog title="Today’s priority" close={() => { setFocus(null); setError(''); }} busy={busy}>
       <h3>{focus.title}</h3><p className="muted">{focus.minutes ? time(focus.minutes) + ' planned' : 'Ready when you are.'}</p>
       {error && <p role="alert">{error}</p>}

@@ -27,7 +27,7 @@ const emergencyNumbers = [
   ['Mobile emergency', '112'], ['Ambulance', '10177'], ['Police', '10111'], ['Cape Town emergency from a landline', '107'],
 ];
 
-export function Emergency({ records, day, open, openProperties }) {
+export function Emergency({ records, day, open, openProperties, openFpgNumbers }) {
   const profile = records.find(item => item.kind === 'emergency');
   const contacts = records.filter(item => item.kind === 'person' && item.emergencyContact);
   const meds = records.filter(item => item.kind === 'medication' && item.area === 'mornay' && item.day <= day && (!item.endedOn || day < item.endedOn));
@@ -68,6 +68,9 @@ export function Emergency({ records, day, open, openProperties }) {
     </section>
     <button className="summary-row property-home-link" onClick={openProperties}>
       <Buildings size={22} /><span><strong>FPG property contacts</strong><small>Find a site or tenant number</small></span><ArrowRight size={18} />
+    </button>
+    <button className="summary-row property-home-link" onClick={openFpgNumbers}>
+      <Phone size={22} /><span><strong>Important FPG numbers</strong><small>Find a colleague or service provider</small></span><ArrowRight size={18} />
     </button>
     {(profile || contacts.length > 0 || meds.length > 0) && <details><summary>Keep an offline copy</summary>
       <p className="muted">The downloaded card includes the private details shown here. Keep it somewhere you can access in an emergency.</p>

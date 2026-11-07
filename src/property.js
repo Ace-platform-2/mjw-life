@@ -16,9 +16,13 @@ export const leasingStages = {
   enquiry: 'Enquiry', proposal: 'Proposal', negotiation: 'Negotiation', signing: 'Signing', handover: 'Handover',
 };
 export const sitePhoneFields = { securityPhone: 'Security / control room', facilitiesPhone: 'Facilities', officePhone: 'Site office' };
+export const fpgNumberCategories = {
+  facilities: 'Facilities', managers: 'Property managers', security: 'Security', services: 'Service providers', other: 'Other',
+};
 
 export const isPropertyEntry = item => item.kind === 'fpg_log' || (item.kind === 'event' && item.propertyType === 'meeting');
-export const isPropertyRecord = item => isPropertyEntry(item) || ['fpg_building', 'fpg_tenant'].includes(item.kind);
+export const isPropertyRecord = item => isPropertyEntry(item) ||
+  ['fpg_building', 'fpg_tenant', 'fpg_contact', 'fpg_document'].includes(item.kind);
 
 export function propertyPhone(value) {
   const leading = String(value || '').trim().replace(/^\+27\s*\(0\)/, '+27 ').match(/^\+?\d[\d ().-]*\d/);
@@ -57,6 +61,24 @@ export function tenantMatches(tenant, building, query) {
   return searchText(query).split(' ').every(term => text.includes(term));
 }
 
+export function fpgNumberMatches(contact, query) {
+  const text = searchText([contact.title, contact.detail, fpgNumberCategories[contact.category]].join(' '));
+  return searchText(query).split(' ').every(term => text.includes(term))
+    || Boolean(matchingPropertyPhone([contact.phone, contact.alternatePhone], query));
+}
+
+export function readFpgNumber(item, values) {
+  const get = field => String(values.get(field) || '').trim();
+  const title = get('title');
+  const category = get('category');
+  const phone = get('phone');
+  const alternatePhone = get('alternatePhone');
+  if (!title) throw new Error('Enter a name or company.');
+  if (!Object.hasOwn(fpgNumberCategories, category)) throw new Error('Choose a category.');
+  if ([phone, alternatePhone].some(number => number && !propertyPhone(number))) throw new Error('Check the phone numbers.');
+  return { ...item, area: 'fpg', title, category, phone, alternatePhone, detail: get('detail') };
+}
+
 export function propertyAttention(records, day) {
   return records.filter(item => isPropertyEntry(item) && item.status !== 'closed' && (item.escalated || (item.due && item.due <= day)))
     .sort((a, b) => Number(Boolean(b.escalated)) - Number(Boolean(a.escalated)) || (a.due || '9999').localeCompare(b.due || '9999'));
@@ -89,11 +111,14 @@ export function readPropertyRecord(item, values, propertyType, buildings, tenant
   }
 
   const tenantId = get('tenantId');
-  if (tenantId && !tenants.some(tenant => tenant.id === tenantId && tenant.buildingId === buildingId)) throw new Error('Choose a tenant at the selected property.');
+  const tenant = tenants.find(tenant => tenant.id === tenantId && tenant.buildingId === buildingId);
+  const keepsHistoricalLink = item.day && item.tenantId === tenantId && item.buildingId === buildingId;
+  if (tenantId && !tenant && !keepsHistoricalLink) throw new Error('Choose a tenant at the selected property.');
+  const tenantName = tenant?.title || (keepsHistoricalLink && item.tenantName) || '';
   const day = get('day');
   const status = get('status');
   if (!day || !Object.hasOwn(propertyTypes, propertyType) || !Object.hasOwn(propertyStatuses, status)) throw new Error('Choose a date, type and status.');
-  Object.assign(record, { tenantId, day, time: get('time'), propertyType, status, location: get('location'), owner: get('owner'),
+  Object.assign(record, { tenantId, tenantName, day, time: get('time'), propertyType, status, location: get('location'), owner: get('owner'),
     due: get('due'), nextAction: get('nextAction'), reference: get('reference'), escalated: values.has('escalated') });
   record.createdAt ||= new Date().toISOString();
 

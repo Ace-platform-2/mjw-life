@@ -23,23 +23,24 @@ export async function loadRecords(userId) {
 }
 
 export async function writeRecord(userId, records, record, remove = false) {
-  if (!remove && !demo && isPropertyRecord(record)) {
+  if (!demo && isPropertyRecord(record)) {
     const { id, kind, ...data } = record;
     data.propertyVersion = crypto.randomUUID();
-    const exists = records.some(item => item.id === id);
+    const others = records.filter(item => item.id !== id);
     const table = supabase.from('life_records');
-    if (exists) {
-      const update = table.update({ kind, data }).eq('user_id', userId).eq('id', id);
+    if (remove || others.length !== records.length) {
+      const mutation = remove ? table.delete().eq('kind', kind) : table.update({ kind, data });
+      const match = mutation.eq('user_id', userId).eq('id', id);
       const version = record.propertyVersion;
-      const checked = version ? update.eq('data->>propertyVersion', version) : update.is('data->>propertyVersion', null);
+      const checked = version ? match.eq('data->>propertyVersion', version) : match.is('data->>propertyVersion', null);
       const { data: saved, error } = await checked.select('id').maybeSingle();
-      if (error) throw new Error('Could not save the property record. Try again.', { cause: error });
+      if (error) throw new Error(remove ? 'Could not delete the property record. Try again.' : 'Could not save the property record. Try again.', { cause: error });
       if (!saved) throw new Error('This property record changed on another device. Reload the app and reopen the entry.');
     } else {
       const { error } = await table.insert({ user_id: userId, id, kind, data });
       if (error) throw new Error('Could not save the property record. Try again.', { cause: error });
     }
-    return [...records.filter(item => item.id !== id), { ...record, propertyVersion: data.propertyVersion }];
+    return remove ? others : [...others, { ...record, propertyVersion: data.propertyVersion }];
   }
   if (!remove) return writeRecords(userId, records, [record]);
   const next = records.filter(item => item.id !== record.id);
@@ -52,16 +53,20 @@ export async function writeRecord(userId, records, record, remove = false) {
   return next;
 }
 
-export async function writeRecords(userId, records, items) {
+export async function writeRecords(userId, records, items, { insertOnly = false } = {}) {
   const ids = new Set(items.map(item => item.id));
   const next = [...records.filter(item => !ids.has(item.id)), ...items];
   if (demo) {
     localStorage.setItem(demoKey, JSON.stringify(next));
     return next;
   }
-  const { error } = await supabase.from('life_records')
-    .upsert(items.map(({ id, kind, ...data }) => ({ user_id: userId, id, kind, data })));
-  if (error) throw error;
+  const rows = items.map(({ id, kind, ...data }) => ({ user_id: userId, id, kind, data }));
+  const table = supabase.from('life_records');
+  const { error } = await (insertOnly ? table.insert(rows) : table.upsert(rows));
+  if (error) {
+    if (insertOnly) throw new Error('Could not save the building documents. Try again.', { cause: error });
+    throw error;
+  }
   return next;
 }
 
@@ -84,6 +89,7 @@ const fileTypes = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
+export const documentFileAccept = Object.keys(fileTypes).map(extension => '.' + extension).join(',');
 const documentBucket = () => supabase.storage.from('life-documents');
 
 export async function storeDocument(userId, file) {
