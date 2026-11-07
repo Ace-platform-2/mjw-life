@@ -455,7 +455,7 @@ function Workspace({ session }) {
           const { error } = await supabase.auth.signOut();
           if (error) setError('Sign-out failed. Try again.');
         }} />}
-        {(view === 'records' || view === 'audio') && <Records key={view} initialKind={view === 'audio' ? 'audio' : 'note'} records={list} areas={areaList} day={day} open={open} downloadDocument={downloadDocument} />}
+        {(view === 'records' || view === 'audio') && <Records key={view} initialKind={view === 'audio' ? 'audio' : 'note'} records={list} areas={areaList} day={day} open={open} userId={userId || 'demo'} downloadDocument={downloadDocument} />}
         {view === 'emergency' && <Emergency records={list} day={day} open={open} openProperties={() => navigate('properties')}
           openFpgNumbers={() => navigate('fpg_numbers')} />}
         {propertyView && <Properties key={view} records={list} day={day} open={open} back={() => showArea('fpg')}

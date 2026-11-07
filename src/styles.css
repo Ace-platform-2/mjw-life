@@ -241,3 +241,20 @@ summary{cursor:pointer;font-weight:700;color:var(--teal);min-height:34px}
 .nav button[aria-current=page] .nav-ribbon{filter:drop-shadow(0 0 6px rgba(0,225,217,.40))}
 .boot-screen .splash-ribbon{width:clamp(118px,34vw,172px);height:auto;aspect-ratio:1;filter:drop-shadow(0 0 24px rgba(0,207,228,.23))}
 @media(max-width:375px){.brand{width:clamp(108px,32vw,150px)}}
+
+
+/* Long-form, device-local audio recorder. */
+.recording-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.recording-controls button{flex:1 1 220px}
+.recording-timer{font-size:1rem;font-variant-numeric:tabular-nums;color:var(--teal);letter-spacing:.035em}
+.recording-active{padding:10px 12px;border:1px solid #6f4c45;border-radius:9px;background:#302020;color:#ffcebd}
+.saved-audio{margin-top:12px;border-top:1px solid var(--line);padding-top:15px}
+.saved-audio h3{font-size:1.04rem;margin-bottom:5px}
+.saved-audio ul{list-style:none;margin:10px 0;padding:0}
+.saved-audio-row{padding:12px 0;border-bottom:1px solid var(--line)}
+.saved-audio-row strong,.saved-audio-row small{display:block;overflow-wrap:anywhere}
+.saved-audio-row small{color:var(--muted);margin-top:3px}
+.saved-audio-row .section-actions{margin-top:8px;gap:5px}
+.saved-audio-row .secondary{display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.saved-audio-row .quiet{min-height:44px}
+@media(max-width:440px){.recording-controls{align-items:stretch;flex-direction:column}.recording-controls button{flex:0 0 auto}.saved-audio-row .section-actions{flex-wrap:wrap}}
