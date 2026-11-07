@@ -15,3 +15,9 @@ Run `npm ci` and `npm run dev`. Without a Supabase connection, development runs 
 5. Run `npm run build` and `npm run test:sites` to verify the build and static packaging.
 
 The initial area names are editable. Personal data is scoped to its owner. Groups and shared commitments belong in a future invitation-only space with separate membership and sharing policies.
+
+## Google sources
+
+Enable Gmail API and Google Calendar API in the Google Cloud project. Configure the Google Auth consent screen and add your Google account as a test user while the app is in Testing. Create a **Web application** OAuth client with `https://mjw-life.vercel.app` as an authorized JavaScript origin. Set its client ID in the Vercel production variable `VITE_GOOGLE_CLIENT_ID` and redeploy.
+
+Open **Calendar → Google sources**. Each preview asks for only the selected source's read-only scope. Google access tokens are used in memory for that preview. The app reads Gmail subject lines and calendar event metadata and saves only selected items to the signed-in workspace. Preview and import are manual.

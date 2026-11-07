@@ -36,3 +36,16 @@ export async function writeRecord(userId, records, record, remove = false) {
   if (result.error) throw result.error;
   return next;
 }
+
+export async function insertRecords(userId, records, items) {
+  if (demo) {
+    const merged = [...records, ...items.filter(item => !records.some(record => record.id === item.id))];
+    localStorage.setItem(demoKey, JSON.stringify(merged));
+    return merged;
+  }
+  const { data, error } = await supabase.from('life_records')
+    .upsert(items.map(({ id, kind, ...data }) => ({ user_id: userId, id, kind, data })),
+      { onConflict: 'user_id,id', ignoreDuplicates: true }).select('id,kind,data');
+  if (error) throw error;
+  return [...records, ...data.map(({ id, kind, data: record }) => ({ ...record, id, kind }))];
+}

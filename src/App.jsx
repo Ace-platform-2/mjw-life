@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, CalendarBlank, CalendarDots, ChartBar, Check, Crosshair, Plus, SquaresFour } from '@phosphor-icons/react';
 import { areas, dailyPlan, dateKey, money, prettyDate, riskSignals, shiftDay, weekStart } from './model.js';
-import { demo, loadRecords, supabase, writeRecord } from './store.js';
+import { demo, insertRecords, loadRecords, supabase, writeRecord } from './store.js';
 
+import { GoogleSources } from './GoogleSources.jsx';
 import { Calendar } from './Calendar.jsx';
 
 const tabs = [
@@ -132,6 +133,19 @@ function Workspace({ session }) {
     }
   }
 
+  async function importRecords(items) {
+    if (lock.current || !records || !items.length) return false;
+    lock.current = true;
+    try {
+      setRecords(await insertRecords(userId, records, items));
+      return true;
+    } catch {
+      return false;
+    } finally {
+      lock.current = false;
+    }
+  }
+
   function navigate(tab) {
     setView(tab);
     setArea(null);
@@ -149,8 +163,8 @@ function Workspace({ session }) {
   const priority = today[0];
   const risks = riskSignals(list, day, capacity.minutes, planned);
   const doneToday = list.filter(item => item.kind === 'task' && item.completed === day).length;
-  const todayEvents = list.filter(item => item.startsAt && item.planned === day && !item.completed)
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const todayEvents = list.filter(item => (item.startsAt || item.calendarOnly) && item.planned === day && !item.completed)
+    .sort((a, b) => (a.startsAt || '').localeCompare(b.startsAt || ''));
   const nearestDraft = list.filter(item => item.suggested && item.planned >= day)
     .sort((a, b) => a.planned.localeCompare(b.planned))[0];
   const messages = ['Leave some room for the unexpected.', 'A smaller plan is still a plan.', 'Moving a task is a decision. Give it a better day.', 'Make the next step easy to start.'];
@@ -245,7 +259,7 @@ function Workspace({ session }) {
             </section>
           </aside>
         </div>}
-        {view === 'calendar' && <Calendar records={list} day={day} areas={areaList} renderRow={renderRow} />}
+        {view === 'calendar' && <><Calendar records={list} day={day} areas={areaList} renderRow={renderRow} /><div className="screen inside"><GoogleSources areas={areaList} records={list} importRecords={importRecords} /></div></>}
         {view === 'areas' && <div className="screen inside">
           <p className="eyebrow">Your workspace</p><h1>{currentArea?.title || 'Life areas'}</h1>
           {currentArea ? <>
@@ -314,6 +328,7 @@ function Editor({ item, day, areas, busy, error, close, save }) {
     if (kind === 'task') {
       Object.assign(record, { due: get('due'), planned: get('planned'), minutes: Number(get('minutes')), owner: get('owner'), status: get('status'), essential: fields.has('essential') });
       if (item.source) record.source = item.source;
+      if (item.calendarOnly) record.calendarOnly = true;
       if (item.startsAt) Object.assign(record, { startsAt: item.startsAt, endsAt: item.endsAt });
       if (item.suggested && !fields.has('acceptDraft')) Object.assign(record, { suggested: true, provenance: item.provenance });
       else if (item.suggested) record.provenance = 'Accepted planning draft';

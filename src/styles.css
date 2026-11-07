@@ -108,3 +108,5 @@ textarea{resize:vertical}
 .nav button{width:min(20%,150px)}
 @media(max-width:450px){.pulse{align-items:flex-start;flex-direction:column;gap:4px}.calendar-heading h2{font-size:1.05rem}.calendar-grid button small{font-size:.57rem}}
 @media(prefers-reduced-motion:no-preference){.pulse{animation:pulse-enter .28s ease-out}@keyframes pulse-enter{from{opacity:.6;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}}
+.google-sources label{margin:10px 0}
+.google-sources .tick input{flex-shrink:0}

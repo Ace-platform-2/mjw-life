@@ -35,7 +35,7 @@ export function sample(day) {
 }
 
 export function dailyPlan(records, day, essentialsOnly) {
-  const tasks = records.filter(item => item.kind === 'task' && !item.suggested && !item.startsAt);
+  const tasks = records.filter(item => item.kind === 'task' && !item.suggested && !item.startsAt && !item.calendarOnly);
   const dueSoon = item => item.due && item.due <= shiftDay(day, 1);
   const open = tasks.filter(item => (item.status === 'open' || item.status === 'escalated') && !item.completed);
   const planned = open.filter(item => item.planned === day).reduce((total, item) => total + (item.minutes || 0), 0);
