@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDots, CheckCircle, Funnel, WarningCircle } from '@phosphor-icons/react';
 import { money, prettyDate, shiftDay } from './model.js';
 import { buildingSnapshot, controlSummary, datedActivity } from './action-control.js';
+import { budgetStages } from './property.js';
 
 const order = ['all', 'fpg', 'personal'];
 const groups = { all: 'All areas', fpg: 'FPG', personal: 'Personal' };
@@ -95,6 +96,10 @@ export function ActionControl({ records, day, open, back, openInbox, openPropert
             <span><strong>{byId.get(row.item.buildingId)?.title || 'Unlinked building'} · {row.item.title}</strong>
               <small>{row.item.status || 'Open'}{row.due ? ' · Due ' + labelDate(row.due) : ' · Follow-up date not entered'}
                 {row.owner ? ' · ' + row.owner : ' · Owner not assigned'}</small>
+              <small>{budgetStages[row.item.budgetStage] || 'Stage not recorded'}
+                {row.item.budgetPeriod ? ' · ' + row.item.budgetPeriod : ''}
+                {row.item.budgetVersion ? ' · Version ' + row.item.budgetVersion : ''}
+                {row.item.submittedOn ? ' · Submitted ' + labelDate(row.item.submittedOn) : ''}</small>
               {row.nextAction && <small>Next: {row.nextAction}</small>}
             </span><ArrowRight size={18}/></button></li>)}</ul>}
     </section>}

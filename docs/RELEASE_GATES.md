@@ -68,3 +68,8 @@ Date: 2026-11-07
 ## Partial Stage 2 improvement
 
 Settings now provides a local metadata archive inventory and saved Gmail checkpoint status. The archive explicitly excludes file binaries, device-local audio and encrypted bank vault data, so it is not a restorable backup. Work records are excluded by default. Full backup/restore, cross-user RLS tests and organisation data segregation remain BLOCKED and tracked separately.
+
+
+## Partial Stage 3 improvement
+
+Budget entries now support an explicitly chosen stage, period, revision and a dated submission reference, with a test proving that submission does not automatically close the case. This is not a substitute for financial forecast sheets, lease assumptions or approval workflows; data validation against MRI/MDA is still pending.

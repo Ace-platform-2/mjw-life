@@ -101,3 +101,34 @@ test('legacy vacancies remain editable and new vacancy availability is stored', 
   assert.equal(vacancy.floorArea, 125.5);
   assert.equal(readPropertyRecord(legacy, fields(), 'vacancy', [building], [tenant]).vacancyStage, '');
 });
+
+
+test('budget stage, period, revision and dated notes remain linked to the building', () => {
+  const original = { id: 'budget', kind: 'fpg_log', propertyType: 'budget', buildingId: building.id };
+  const draft = readPropertyRecord(original, fields({
+    budgetStage: 'assumptions', budgetPeriod: 'FY2027/28', budgetVersion: 'v1',
+    owner: 'Property Manager', due: '2026-11-09', nextAction: 'Confirm expiring leases',
+    followUpNote: 'Assumptions sent for review',
+  }), 'budget', [building], [tenant]);
+  assert.equal(draft.buildingId, building.id);
+  assert.equal(draft.budgetStage, 'assumptions');
+  assert.equal(draft.budgetPeriod, 'FY2027/28');
+  assert.equal(draft.budgetVersion, 'v1');
+  assert.equal(draft.followUpNotes.length, 1);
+  assert.equal(draft.owner, 'Property Manager');
+  assert.throws(() => readPropertyRecord(draft, fields({
+    budgetStage: 'submitted', submittedOn: '',
+  }), 'budget', [building], [tenant]), /date when the budget was submitted/);
+  const submitted = readPropertyRecord(draft, fields({
+    budgetStage: 'submitted', submittedOn: '2026-11-09', submissionRef: 'Submission email',
+    budgetPeriod: 'FY2027/28', budgetVersion: 'v2',
+    followUpNote: 'Submission sent',
+  }), 'budget', [building], [tenant]);
+  assert.equal(submitted.submittedOn, '2026-11-09');
+  assert.equal(submitted.submissionRef, 'Submission email');
+  assert.deepEqual(submitted.followUpNotes.map(x => x.text),
+    ['Assumptions sent for review', 'Submission sent']);
+  assert.equal(submitted.status, 'open'); // Submission never silently closes the matter.
+  assert.throws(() => readPropertyRecord(draft, fields({ budgetStage: 'not-a-stage' }),
+    'budget', [building], [tenant]), /valid budget stage/);
+});
