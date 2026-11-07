@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node --test tests/audio-utils.test.mjs && vite build && node scripts/prepare-sites-build.mjs",
+    "build": "npm run test:unit && vite build && node scripts/prepare-sites-build.mjs && npm run test:sites",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
-    "test:audio": "node --test tests/audio-utils.test.mjs"
+    "test:audio": "node --test tests/audio-utils.test.mjs",
+    "test:unit": "node --test tests/action-control.test.mjs tests/audio-utils.test.mjs tests/home-finance.test.mjs tests/properties.test.mjs tests/workspace.test.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "3.8.1",

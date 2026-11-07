@@ -10,6 +10,7 @@ import { BankAccounts, TaxLog, TravelLog } from './FinanceLogs.jsx';
 import { Emergency, Family, HouseLists } from './Personal.jsx';
 import { GmailRefresh } from './GmailRefresh.jsx';
 import { Budget } from './Budget.jsx';
+import { ActionControl } from './ActionControl.jsx';
 import { Medication } from './Medication.jsx';
 import { downloadFile } from './files.js';
 import { Properties } from './Properties.jsx';
@@ -285,7 +286,7 @@ function Workspace({ session }) {
   const events = eventsOn(day).sort((a, b) => (a.startsAt || '').localeCompare(b.startsAt || ''));
   const upcoming = events.find(item => item.startsAt && (!item.endsAt || Date.parse(item.endsAt) > Date.now())) || events.find(item => !item.startsAt);
   const available = availability(capacity, events, day);
-  const priority = today.find(item => item.id === capacity.focusId) || today.find(item => item.essential || item.due && item.due <= day) || today[0];
+  const priority = today.find(item => item.id === capacity.focusId) || today[0];
   const candidates = list.filter(item => item.kind === 'task' && !isEvent(item) && !item.suggested && !item.completed &&
     ['open', 'escalated'].includes(item.status) && (!capacity.essentials || item.essential || item.status === 'escalated'));
   const riskEvents = Array.from({ length: 8 }, (_, index) => shiftDay(day, index)).flatMap(date => eventsOn(date)
@@ -370,7 +371,7 @@ function Workspace({ session }) {
   }
 
   const propertyView = ['properties', 'fpg_numbers', 'fpg_attention', 'fpg_budgets'].includes(view);
-  const navView = propertyView || ['records', 'audio', 'goals', 'review', 'emergency'].includes(view) ? 'areas' : view;
+  const navView = view === 'catchup' ? 'today' : propertyView || ['records', 'audio', 'goals', 'review', 'emergency'].includes(view) ? 'areas' : view;
   if (!records && !error) return <Splash />;
   let editDialog;
   if (editor) {
@@ -409,6 +410,9 @@ function Workspace({ session }) {
               <button onClick={() => open({ kind: 'tax_receipt', area: 'finance', day })}><Receipt size={22} /> Receipt</button>
               <button onClick={() => open({ kind: 'house_item', area: 'house', category: 'shopping' })}><ShoppingCart size={22} /> Shopping</button>
             </div>
+            <button className="summary-row control-home-link" onClick={() => navigate('catchup')}>
+              <Tray size={22}/><span><strong>Catch-up and action control</strong><small>Open budgets, overdue follow-ups and recent activity</small></span><ArrowRight size={18}/>
+            </button>
             <button className="summary-row property-home-link" onClick={() => navigate('properties')}>
               <Buildings size={22} /><span><strong>FPG Properties</strong><small>Find a tenant or log site work</small></span><ArrowRight size={18} />
             </button>
@@ -448,6 +452,8 @@ function Workspace({ session }) {
             </section>
           </aside>
         </div>}
+        {view === 'catchup' && <ActionControl records={list} day={day} open={open} back={() => navigate('today')}
+          openInbox={() => navigate('inbox')} openProperties={() => navigate('fpg_budgets')}/>}
         {view === 'calendar' && <Calendar key={calendarDate || 'today'} records={list} day={day} initialDate={calendarDate} areas={areaList} open={open} />}
         {view === 'inbox' && <Inbox records={list} day={day} open={open} save={save} busy={busy}
           refresh={<GmailRefresh records={list} areas={areaList} readCheckpoint={key => getGmailCheckpoint(userId, key)} commit={commitGmail} settings={() => navigate('settings')} />} />}
@@ -466,7 +472,9 @@ function Workspace({ session }) {
             {currentArea ? <button className="quiet" onClick={() => setArea(null)}>All areas</button> : <button className="quiet" onClick={() => open({ kind: 'area' })}>Add area</button>}
           </div>
           {currentArea ? <>
-            {area === 'fpg' && <><button className="summary-row property-home-link" onClick={() => navigate('properties')}>
+            {area === 'fpg' && <><button className="summary-row control-home-link" onClick={() => navigate('catchup')}>
+              <Tray size={22} /><span><strong>Catch-up</strong><small>Urgent matters, budgets and follow-ups</small></span><ArrowRight size={18} />
+            </button><button className="summary-row property-home-link" onClick={() => navigate('properties')}>
               <Buildings size={22} /><span><strong>Properties</strong><small>Tenant files, arrears, vacancies and site work</small></span><ArrowRight size={18} />
             </button><button className="summary-row property-home-link" onClick={() => navigate('fpg_budgets')}>
               <CalendarDots size={22} /><span><strong>Property budgets</strong><small>Deadlines, submissions and follow-ups</small></span><ArrowRight size={18} />

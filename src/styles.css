@@ -258,3 +258,22 @@ summary{cursor:pointer;font-weight:700;color:var(--teal);min-height:34px}
 .saved-audio-row .secondary{display:inline-flex;align-items:center;justify-content:center;gap:5px}
 .saved-audio-row .quiet{min-height:44px}
 @media(max-width:440px){.recording-controls{align-items:stretch;flex-direction:column}.recording-controls button{flex:0 0 auto}.saved-audio-row .section-actions{flex-wrap:wrap}}
+
+
+/* Action-control UI: concise mobile-first daily and FPG review. */
+.control-home-link{background:linear-gradient(110deg,#132b35,#172839);border-color:#306274}
+.control-home-link>svg:first-child{color:var(--teal)}
+.control-screen{max-width:1050px}
+.control-screen .section-actions h2{display:flex;align-items:center;gap:7px;min-width:0}
+.control-screen .stat-grid dd{font-size:1.35rem}
+.control-screen .stat-grid{margin-top:16px}
+.control-list{list-style:none;margin:8px 0 0;padding:0}
+.control-list li{border-bottom:1px solid var(--line)}
+.control-list .control-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:12px 3px;min-height:56px;overflow-wrap:anywhere}
+.control-row>span{min-width:0;flex:1}
+.control-row strong,.control-row small{display:block}
+.control-row small{margin-top:3px;color:var(--muted);font-size:.79rem}
+.control-row .control-flags{color:#edb886;font-weight:720}
+.control-row>svg{flex-shrink:0;color:var(--teal)}
+.property-quick-stats{margin-top:12px}
+@media(max-width:440px){.control-screen .two-fields{grid-template-columns:1fr}.control-screen .section-actions{align-items:start}.control-screen .section-actions h2{font-size:1.1rem}}

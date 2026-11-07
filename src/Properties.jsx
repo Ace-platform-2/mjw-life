@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Buildings, Camera, DownloadSimple, MagnifyingGlass, Phone, Plus, Warning, Wrench } from '@phosphor-icons/react';
 import { BuildingDocuments } from './BuildingDocuments.jsx';
 import { downloadFile } from './files.js';
+import { buildingSnapshot, controlSummary } from './action-control.js';
 import { money, prettyDate } from './model.js';
 import { localTime } from './planning.js';
 import { buildingMatches, fpgNumberCategories, fpgNumberMatches, isPropertyEntry, leasingStages, matchingPropertyPhone, propertyAttention, propertyPhone, propertyStatuses, propertyTypes, propertyWorkMatches, sitePhoneFields, tenantMatches, vacancyStages } from './property.js';
@@ -201,6 +202,8 @@ export function Properties({ records, day, open, back, downloadDocument, initial
   const building = buildings.get(buildingId);
   const tenant = tenants.find(row => row.id === tenantId);
   const buildingNumbers = building ? Object.entries(sitePhoneFields).filter(([name]) => propertyPhone(building[name])) : [];
+  const control = building ? buildingSnapshot(entries, building.id, day)
+    : controlSummary(entries, day, { scope: 'fpg' });
 
   function selectBuilding(id) {
     setBuildingId(id);
@@ -225,6 +228,12 @@ export function Properties({ records, day, open, back, downloadDocument, initial
       <div className="page-heading"><div><small>FPG · Property management</small><h1>{building?.title || 'Properties'}</h1></div>
         <button className="secondary" onClick={() => open(building || { kind: 'fpg_building' })}>{building ? 'Edit property' : 'Add property'}</button></div>
       {building && (building.address || building.erf) && <p className="muted">{[building.address, building.erf && 'Erf ' + building.erf].filter(Boolean).join(' · ')}</p>}
+      {entries.length > 0 && <dl className="stat-grid property-quick-stats" aria-label="Saved property action status">
+        <div><dt>Open work</dt><dd>{control.open}</dd></div>
+        <div><dt>Urgent</dt><dd>{control.urgent}</dd></div>
+        <div><dt>Open budgets</dt><dd>{control.budgets}</dd></div>
+        <div><dt>Overdue</dt><dd>{control.overdue}</dd></div>
+      </dl>}
       {buildingNumbers.length > 0 && <section className="property-panel">
         <h2>Site numbers</h2>
         <ul>{buildingNumbers.map(([name, label]) =>

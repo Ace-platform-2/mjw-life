@@ -24,3 +24,6 @@ Treat the ribbon as a proprietary brand identifier, not as an already registered
 
 
 Audio UX decision (7 Nov 2026): Preserve the 120-minute device-local MediaRecorder flow, streamed IndexedDB audio chunks with a recovery/download list, and live browser transcription in the editable review field. Never advertise the Wispr Flow connector as a live transcription API. Keep separate 30-minute/50 MB limits for on-device Whisper Tiny file processing and note browser background/auto-download limitations. Audio metadata must be scoped to the signed-in workspace owner and not committed to source or uploaded to Supabase.
+
+
+Release acceptance: production build MUST run unit tests for action-control, audio, workspace, properties and personal/Gmail/finance logic. Run Sites packaging tests only after the Vite build. Keep action-control scoring deterministic, non-destructive and explicit about incomplete or stale data. Never treat a completed deployment as evidence that device-level live recording, background capture or cross-source sync has passed. Review docs/RELEASE_GATES.md for open requirements.
