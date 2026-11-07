@@ -1,3 +1,4 @@
+import { actionSignals } from './action-control.js';
 export const areas = [
   ['mornay', 'Mornay', 'Health, habits, rest and personal admin'],
   ['family', 'My Family', 'Family care, relationships and time together'],
@@ -41,7 +42,8 @@ export function dailyPlan(records, day, essentialsOnly) {
   const open = tasks.filter(item => (item.status === 'open' || item.status === 'escalated') && !item.completed);
   const planned = open.filter(item => item.planned === day).reduce((total, item) => total + (item.minutes || 0), 0);
   const today = open.filter(item => (item.planned === day || dueSoon(item)) && (!essentialsOnly || item.essential || item.status === 'escalated'))
-    .sort((a, b) => Number(b.essential || b.status === 'escalated') - Number(a.essential || a.status === 'escalated') || (a.due || '9999').localeCompare(b.due || '9999'));
+    .sort((a, b) => (actionSignals(b, day)?.score || 0) - (actionSignals(a, day)?.score || 0) ||
+      (a.due || '9999').localeCompare(b.due || '9999'));
   const waiting = tasks.filter(item => item.status === 'waiting');
   return { today, planned, waiting };
 }

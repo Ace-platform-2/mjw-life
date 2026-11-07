@@ -66,3 +66,12 @@ Live dictation updates the transcript textarea while recording on browsers with 
 On-device file transcription uses the existing Whisper Tiny model and currently accepts audio up to 50 MB and 30 minutes. Long recording support applies to **recording and audio download**, not to Whisper Tiny batch transcription. The transcript can be edited before saving as a note. A repeated-word quality filter rejects obvious hallucinated output. Keep this screen open and prevent the phone from sleeping during recording; browsers can pause background microphone access. Local storage is device-specific and may be evicted or removed by browser settings.
 
 Wispr Flow's official ChatGPT connector is read-only for existing notes and meeting transcripts; it is not a live transcription SDK for a separate web app. Paste or dictate with Wispr Flow into the transcript field where the native Wispr keyboard/app supports it. Do not request Wispr Flow login tokens, patch its application, or use reverse-engineered APIs.
+
+
+## Catch-up and action control (private preview)
+
+Open **Today → Catch-up and action control**, or **Areas → FPG → Catch-up**. Review saved open work, overdue follow-ups, escalations and property budgets by property. Missing owner, next action and date are visible. The date-range view lists items dated within a selected range; it does not certify when emails arrived or automatically reconcile MRI, MDA, Outlook or Google Calendar. All values are from existing private records. Open an item to verify/update it manually.
+
+The Today priority now ranks overdue and escalated tasks before routine items while honouring a manually chosen focus. The Property directory shows open, urgent, budget and overdue counts from saved work logs. An arrears total is explicitly a sum of known manually saved balances, with missing balances counted separately; this is not a live debtor ledger.
+
+Release gates and the 14-day acceptance criteria are maintained in [docs/RELEASE_GATES.md](docs/RELEASE_GATES.md). User acceptance on mobile, full backup/recovery, FPG organisation data governance, Outlook/MRI integration, notification delivery and long-audio transcription are not marked complete.
