@@ -89,3 +89,7 @@ The default export contains personal-area metadata only. Including FPG records r
 An FPG property **Budget** log now has a stage (Draft → Assumptions in progress → Under review → Awaiting approval → Approved → Submitted), period, revision, submission date and reference. All stages are manually confirmed. A submitted budget requires a submission date, and does not automatically close the action. Budget entries retain dated follow-up notes and are visible by building from **Properties → Budgets** or **Today → Catch-up → Budget control**.
 
 This is a milestone/control register, not a financial budget workbook or an MRI/MDA import. The actual leasing assumptions, rental amounts and sign-off documents still require authorised source data and human verification.
+
+## Guided operational activation
+
+If a selected FPG property has no open operational entries, Catch-up offers one-tap **Add budget**, **Add arrears** and **Add vacancy** forms. The portfolio budget empty state separately provides Add verified budget entry. These actions create editable draft entries only after the user supplies and saves actual facts. No balances, approvals, tenant correspondence or external source data are inferred.

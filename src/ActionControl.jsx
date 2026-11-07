@@ -68,6 +68,15 @@ export function ActionControl({ records, day, open, back, openInbox, openPropert
       {scope !== 'personal' && <><div><dt>Open budgets</dt><dd>{summary.budgets}</dd></div>
       <div><dt>Missing owners</dt><dd>{summary.missingOwner}</dd></div></>}
     </dl>
+    {scope === 'fpg' && buildings.length > 0 && summary.open === 0 && <section className="feature-section">
+      <h2>Start the operational register</h2>
+      <p className="muted">No open FPG actions are saved for this selection. The directory alone cannot supply budgets, debtor balances or follow-ups. Create entries from verified records and leave unknown amounts blank.</p>
+      <div className="section-actions">
+        <button className="secondary" onClick={() => open({kind:'fpg_log', propertyType:'budget', buildingId, fixedType:true})}>Add budget</button>
+        <button className="secondary" onClick={() => open({kind:'fpg_log', propertyType:'arrears', buildingId, fixedType:true})}>Add arrears</button>
+        <button className="secondary" onClick={() => open({kind:'fpg_log', propertyType:'vacancy', buildingId, fixedType:true})}>Add vacancy</button>
+      </div>
+    </section>}
     <section className="feature-section">
       <div className="section-actions">
         <h2><WarningCircle size={22} /> Action register</h2>
@@ -90,7 +99,10 @@ export function ActionControl({ records, day, open, back, openInbox, openPropert
     </section>
     {scope !== 'personal' && <section className="feature-section">
       <div className="section-actions"><h2>Budget control</h2><button className="quiet" onClick={openProperties}>Open properties</button></div>
-      {activeBudgets.length === 0 ? <p className="muted">No open budget entries saved in this scope.</p>
+      {activeBudgets.length === 0 ? <div>
+          <p className="muted">No open budget entries are saved in this scope. This is not confirmation that the budgets were submitted.</p>
+          {scope === 'fpg' && buildings.length > 0 && <button className="secondary" onClick={() => open({kind:'fpg_log', propertyType:'budget', buildingId, fixedType:true})}>Add verified budget entry</button>}
+        </div>
         : <ul className="control-list">{activeBudgets.map(row => <li key={row.id}>
           <button className="row-detail control-row" onClick={() => open(row.item)}>
             <span><strong>{byId.get(row.item.buildingId)?.title || 'Unlinked building'} · {row.item.title}</strong>
