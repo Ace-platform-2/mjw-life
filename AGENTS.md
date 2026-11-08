@@ -27,3 +27,7 @@ Audio UX decision (7 Nov 2026): Preserve the 120-minute device-local MediaRecord
 
 
 Release acceptance: production build MUST run unit tests for action-control, audio, workspace, properties and personal/Gmail/finance logic. Run Sites packaging tests only after the Vite build. Keep action-control scoring deterministic, non-destructive and explicit about incomplete or stale data. Never treat a completed deployment as evidence that device-level live recording, background capture or cross-source sync has passed. Review docs/RELEASE_GATES.md for open requirements.
+
+## Responsive UI decision (8 November 2026)
+
+The Samsung A37 Today screenshot identified touching Catch-up and FPG cards. Today shortcuts use the today-highlights class and FPG Area shortcuts use area-shortcuts, with visible 12px+ gaps. Preserve the original approved ribbon identity. Phones below 600px are single-column, tablet portrait 600–1099px must avoid the cramped legacy 800px desktop split, and >=1100px enables the dual-column Today view. At >=1280px with a fine pointer, use the capped workstation shell and side navigation; touch tablets retain bottom tabs. Keep bottom safe-area space and avoid horizontal scroll. Run tests/responsive-contract.test.mjs with the existing build checks. See docs/RESPONSIVE_QA.md for hardware checks that remain outstanding.

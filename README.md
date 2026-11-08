@@ -93,3 +93,7 @@ This is a milestone/control register, not a financial budget workbook or an MRI/
 ## Guided operational activation
 
 If a selected FPG property has no open operational entries, Catch-up offers one-tap **Add budget**, **Add arrears** and **Add vacancy** forms. The portfolio budget empty state separately provides Add verified budget entry. These actions create editable draft entries only after the user supplies and saves actual facts. No balances, approvals, tenant correspondence or external source data are inferred.
+
+## Responsive device layout (8 Nov 2026)
+
+MJW Life now has consistent 12px card gaps on Today/FPG Areas, mobile safe-area spacing, a single-column tablet portrait layout and a wide-screen navigation rail for mouse/trackpad workstations. Touch tablets retain bottom navigation. Desktop content caps at 1620px for readable density. CSS/JSX layout contracts run in the release build. See docs/RESPONSIVE_QA.md for device acceptance criteria and outstanding physical-device checks.
