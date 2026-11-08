@@ -410,7 +410,8 @@ function Workspace({ session }) {
               <button onClick={() => open({ kind: 'tax_receipt', area: 'finance', day })}><Receipt size={22} /> Receipt</button>
               <button onClick={() => open({ kind: 'house_item', area: 'house', category: 'shopping' })}><ShoppingCart size={22} /> Shopping</button>
             </div>
-            <button className="summary-row control-home-link" onClick={() => navigate('catchup')}>
+            <div className="today-highlights" aria-label="Key sections">
+              <button className="summary-row control-home-link" onClick={() => navigate('catchup')}>
               <Tray size={22}/><span><strong>Catch-up and action control</strong><small>Open budgets, overdue follow-ups and recent activity</small></span><ArrowRight size={18}/>
             </button>
             <button className="summary-row property-home-link" onClick={() => navigate('properties')}>
@@ -419,6 +420,7 @@ function Workspace({ session }) {
             {upcoming ? <button className="summary-row" onClick={() => open(list.find(item => item.id === upcoming.id) || upcoming)}>
               <CalendarDots size={22} /><span><small>Next on your calendar · {upcoming.startsAt ? localTime(upcoming.startsAt) : 'All day'}</small><strong>{upcoming.title}</strong></span><ArrowRight size={18} />
             </button> : <button className="summary-row" onClick={() => navigate('calendar')}><CalendarDots size={22} /><span><strong>Nothing else scheduled today</strong><small>View upcoming days</small></span><ArrowRight size={18} /></button>}
+            </div>
             {risks.length > 0 && <section className="attention">
               <h2>Needs attention</h2><ul>{risks.map(risk => <li key={risk.title}><button className="row-detail" onClick={() => risk.view ? navigate(risk.view) : risk.day ? navigate('calendar', risk.day) : open(risk.item || capacity)}><span>{risk.title}<small>{risk.detail}</small></span><ArrowRight size={18} /></button></li>)}</ul>
             </section>}
@@ -472,7 +474,7 @@ function Workspace({ session }) {
             {currentArea ? <button className="quiet" onClick={() => setArea(null)}>All areas</button> : <button className="quiet" onClick={() => open({ kind: 'area' })}>Add area</button>}
           </div>
           {currentArea ? <>
-            {area === 'fpg' && <><button className="summary-row control-home-link" onClick={() => navigate('catchup')}>
+            {area === 'fpg' && <div className="area-shortcuts"><button className="summary-row control-home-link" onClick={() => navigate('catchup')}>
               <Tray size={22} /><span><strong>Catch-up</strong><small>Urgent matters, budgets and follow-ups</small></span><ArrowRight size={18} />
             </button><button className="summary-row property-home-link" onClick={() => navigate('properties')}>
               <Buildings size={22} /><span><strong>Properties</strong><small>Tenant files, arrears, vacancies and site work</small></span><ArrowRight size={18} />
@@ -480,7 +482,7 @@ function Workspace({ session }) {
               <CalendarDots size={22} /><span><strong>Property budgets</strong><small>Deadlines, submissions and follow-ups</small></span><ArrowRight size={18} />
             </button><button className="summary-row property-home-link" onClick={() => navigate('fpg_numbers')}>
               <Phone size={22} /><span><strong>Important FPG numbers</strong><small>Colleagues, security and service providers</small></span><ArrowRight size={18} />
-            </button></>}
+            </button></div>}
             <div className="section-actions"><button className="secondary" onClick={() => open({ kind: 'task', area })}>Add item</button><button className="quiet" onClick={() => open(currentArea)}>Edit area</button></div>
             {currentArea.id === 'finance' && <>
               <div className="segmented record-tabs" aria-label="Finance view">{Object.entries({ budget: 'Budget', accounts: 'Accounts', travel: 'Travel', sars: 'SARS' }).map(([id, label]) =>
